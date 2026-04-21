@@ -46,12 +46,26 @@ class DefaultSegmentorV2(nn.Module):
         backbone=None,
         criteria=None,
         freeze_backbone=False,
+        conditions=None,
+        teacher=None,
+        teacher_weights=None,
+        teacher_criteria=None,
     ):
         super().__init__()
-        self.seg_head = (
-            nn.Linear(backbone_out_channels, num_classes)
-            if num_classes > 0
-            else nn.Identity()
+        self.conditions = conditions if conditions is not None else ("Default",)
+        self.num_classes = (
+            num_classes if isinstance(num_classes, (list, tuple)) else (num_classes,)
+        )
+        assert len(self.conditions) == len(self.num_classes)
+        self.seg_heads = nn.ModuleDict(
+            {
+                condition: (
+                    nn.Linear(backbone_out_channels, self.num_classes[i])
+                    if self.num_classes[i] > 0
+                    else nn.Identity()
+                )
+                for i, condition in enumerate(self.conditions)
+            }
         )
         self.backbone = build_model(backbone)
         self.criteria = build_criteria(criteria)
@@ -59,6 +73,27 @@ class DefaultSegmentorV2(nn.Module):
         if self.freeze_backbone:
             for p in self.backbone.parameters():
                 p.requires_grad = False
+        self.teacher = (
+            DefaultTeacherWrapper(teacher, teacher_weights)
+            if teacher is not None
+            else None
+        )
+        self.teacher_criteria = (
+            build_criteria(teacher_criteria)
+            if teacher_criteria is not None
+            else self.criteria
+        )
+        if self.teacher is not None:
+            self.distill_heads = nn.ModuleDict(
+                {
+                    condition: (
+                        nn.Linear(backbone_out_channels, self.num_classes[i])
+                        if self.num_classes[i] > 0
+                        else nn.Identity()
+                    )
+                    for i, condition in enumerate(self.conditions)
+                }
+            )
 
     def forward(self, input_dict, return_point=False):
         point = Point(input_dict)
@@ -75,7 +110,12 @@ class DefaultSegmentorV2(nn.Module):
             feat = point.feat
         else:
             feat = point
-        seg_logits = self.seg_head(feat)
+        condition = input_dict.get("condition", ("Default",))
+        # Currently, only supports one condition per batch, i.e., homogenous batches
+        assert all(cond == condition[0] for cond in condition)
+        assert condition[0] in self.conditions
+        seg_head = self.seg_heads[condition[0]]
+        seg_logits = seg_head(feat)
         return_dict = dict()
         if return_point:
             # PCA evaluator parse feat and coord in point
@@ -83,6 +123,12 @@ class DefaultSegmentorV2(nn.Module):
         # train
         if self.training:
             loss = self.criteria(seg_logits, input_dict["segment"])
+            if self.teacher is not None:
+                teacher_labels = self.teacher(input_dict)
+                distill_head = self.distill_heads[condition[0]]
+                distill_logits = distill_head(feat)
+                distill_loss = self.teacher_criteria(distill_logits, teacher_labels)
+                loss = 0.5 * loss + 0.5 * distill_loss
             return_dict["loss"] = loss
         # eval
         elif "segment" in input_dict.keys():
@@ -93,6 +139,33 @@ class DefaultSegmentorV2(nn.Module):
         else:
             return_dict["seg_logits"] = seg_logits
         return return_dict
+
+
+class DefaultTeacherWrapper:  # not an nn.Module, keeps it detached from training
+    def __init__(
+        self,
+        teacher,
+        teacher_weights,
+    ):
+        super().__init__()
+        self.teacher = build_model(teacher).cuda()
+
+        # Load weights
+        ckpt = torch.load(teacher_weights, map_location="cpu", weights_only=False)
+        state_dict = {
+            k[7:] if k.startswith("module.") else k: v
+            for k, v in ckpt["state_dict"].items()
+        }
+        self.teacher.load_state_dict(state_dict, strict=True)
+
+        self.teacher.requires_grad_(False)
+        self.teacher.eval()
+
+    @torch.no_grad()
+    def __call__(self, input_dict):
+        input_dict.pop("segment", None)  # remove segment if any to not calculate loss
+        seg_logits = self.teacher(input_dict)["seg_logits"]
+        return seg_logits.argmax(dim=-1)
 
 
 @MODELS.register_module()

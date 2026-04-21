@@ -1,0 +1,90 @@
+[project]
+name = "Pointcept"
+version = "0.1.0"
+description = "A 3D Point Cloud Understanding Library based on PyTorch"
+readme = "README.md"
+dependencies = [
+    # Core PyTorch
+    "torch==2.8.0",
+    "torchvision==0.23.0",
+    
+    # Scientific & Utils
+    "h5py",
+    "pyyaml",
+    "tensorboard",
+    "tensorboardx",
+    "yapf",
+    "addict",
+    "einops",
+    "scipy",
+    "plyfile",
+    "termcolor",
+    "timm",
+    "open3d",
+    "wheel",
+    "imageio",
+    "wandb",
+    "albumentations",
+    "rerun-sdk",
+    "peft",
+
+    # CUDA / Hardware specific
+    "spconv-cu126",
+    "flash-attn",
+
+    # PyG Dependencies
+    "torch-geometric",
+    "torch-scatter",
+    "torch-cluster",
+
+    # Local Libs
+    "pointops",
+    "pointgroup-ops",
+    "pointseg",
+]
+requires-python = "==3.12.*"
+
+[tool.uv]
+required-environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'"
+]
+no-build-isolation-package = ["pointops", "pointgroup_ops", "pointseg"]
+
+[project.optional-dependencies]
+notebook = [
+    "rerun-sdk[notebook]>=0.25.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu126" }]
+torchvision = [{ index = "pytorch-cu126" }]
+torch-scatter = [{ index = "pyg-cu126" }]
+torch-cluster = [{ index = "pyg-cu126" }]
+
+pointops = [{ path = "libs/pointops" }]
+pointgroup-ops = [{ path = "libs/pointgroup_ops" }]
+pointseg = [{ path = "libs/pointseg" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[[tool.uv.index]]
+name = "pyg-cu126"
+url = "https://data.pyg.org/whl/torch-2.8.0+cu126.html"
+explicit = true
+format = "flat"
+
+[tool.uv.extra-build-dependencies]
+flash-attn = [{ requirement = "torch", match-runtime = true}]
+
+[tool.uv.extra-build-variables]
+flash-attn = { FLASH_ATTENTION_SKIP_CUDA_BUILD = "TRUE"}

@@ -28,18 +28,7 @@ from concurrent.futures import ProcessPoolExecutor
 from itertools import repeat
 
 
-def create_lidar(frame):
-    """Parse and save the lidar data in psd format.
-    Args:
-        frame (:obj:`Frame`): Open dataset frame proto.
-    """
-    (
-        range_images,
-        camera_projections,
-        segmentation_labels,
-        range_image_top_pose,
-    ) = frame_utils.parse_range_image_and_camera_projection(frame)
-
+def create_lidar(frame, range_images, camera_projections, range_image_top_pose):
     points, cp_points, valid_masks = convert_range_image_to_point_cloud(
         frame,
         range_images,
@@ -70,19 +59,12 @@ def create_lidar(frame):
     return velodyne, valid_masks
 
 
-def create_label(frame):
-    (
-        range_images,
-        camera_projections,
-        segmentation_labels,
-        range_image_top_pose,
-    ) = frame_utils.parse_range_image_and_camera_projection(frame)
-
+def create_label(frame, range_images, seg_labels):
     point_labels = convert_range_image_to_point_cloud_labels(
-        frame, range_images, segmentation_labels
+        frame, range_images, seg_labels, ri_index=0
     )
     point_labels_ri2 = convert_range_image_to_point_cloud_labels(
-        frame, range_images, segmentation_labels, ri_index=1
+        frame, range_images, seg_labels, ri_index=1
     )
 
     # point labels.
@@ -136,6 +118,8 @@ def convert_range_image_to_cartesian(
     )
 
     for c in frame.context.laser_calibrations:
+        if c.name != open_dataset.LaserName.TOP:
+            continue
         range_image = range_images[c.name][ri_index]
         if len(c.beam_inclinations) == 0:  # pylint: disable=g-explicit-length-test
             beam_inclinations = range_image_utils.compute_inclination(
@@ -146,7 +130,7 @@ def convert_range_image_to_cartesian(
             beam_inclinations = tf.constant(c.beam_inclinations)
 
         beam_inclinations = tf.reverse(beam_inclinations, axis=[-1])
-        extrinsic = np.reshape(np.array(c.extrinsic.transform), [4, 4])
+        extrinsic = np.eye(4, dtype=np.float32)
 
         range_image_tensor = tf.reshape(
             tf.convert_to_tensor(value=range_image.data), range_image.shape.dims
@@ -219,6 +203,8 @@ def convert_range_image_to_point_cloud(
     )
 
     for c in calibrations:
+        if c.name != open_dataset.LaserName.TOP:
+            continue
         range_image = range_images[c.name][ri_index]
         range_image_tensor = tf.reshape(
             tf.convert_to_tensor(value=range_image.data), range_image.shape.dims
@@ -241,7 +227,7 @@ def convert_range_image_to_point_cloud(
 
 
 def convert_range_image_to_point_cloud_labels(
-    frame, range_images, segmentation_labels, ri_index=0
+    frame, range_images, seg_labels, ri_index=0
 ):
     """Convert segmentation labels from range images to point clouds.
 
@@ -249,7 +235,7 @@ def convert_range_image_to_point_cloud_labels(
     frame: open dataset frame
     range_images: A dict of {laser_name, [range_image_first_return,
     range_image_second_return]}.
-    segmentation_labels: A dict of {laser_name, [range_image_first_return,
+    seg_labels: A dict of {laser_name, [range_image_first_return,
     range_image_second_return]}.
     ri_index: 0 for the first return, 1 for the second return.
 
@@ -260,14 +246,16 @@ def convert_range_image_to_point_cloud_labels(
     calibrations = sorted(frame.context.laser_calibrations, key=lambda c: c.name)
     point_labels = []
     for c in calibrations:
+        if c.name != open_dataset.LaserName.TOP:
+            continue
         range_image = range_images[c.name][ri_index]
         range_image_tensor = tf.reshape(
             tf.convert_to_tensor(range_image.data), range_image.shape.dims
         )
         range_image_mask = range_image_tensor[..., 0] > 0
 
-        if c.name in segmentation_labels:
-            sl = segmentation_labels[c.name][ri_index]
+        if c.name in seg_labels:
+            sl = seg_labels[c.name][ri_index]
             sl_tensor = tf.reshape(tf.convert_to_tensor(sl.data), sl.shape.dims)
             sl_points_tensor = tf.gather_nd(sl_tensor, tf.where(range_image_mask))
         else:
@@ -302,8 +290,12 @@ def handle_process(file_path, output_root, test_frame_list):
 
         os.makedirs(save_path / timestamp, exist_ok=True)
 
-        # extract frame pass above check
-        point_cloud, valid_masks = create_lidar(frame)
+        range_images, camera_projections, seg_labels, range_image_top_pose = (
+            frame_utils.parse_range_image_and_camera_projection(frame)
+        )
+        point_cloud, valid_masks = create_lidar(
+            frame, range_images, camera_projections, range_image_top_pose
+        )
         point_cloud = point_cloud.reshape(-1, 4)
         coord = point_cloud[:, :3]
         strength = np.tanh(point_cloud[:, -1].reshape([-1, 1]))
@@ -321,7 +313,9 @@ def handle_process(file_path, output_root, test_frame_list):
         # save label
         if split != "testing":
             # ignore TYPE_UNDEFINED, ignore_index 0 -> -1
-            label = create_label(frame)[:, 1].reshape([-1]) - 1
+            label = (
+                create_label(frame, range_images, seg_labels)[:, 1].reshape([-1]) - 1
+            )
             np.save(save_path / timestamp / "segment.npy", label)
 
 
@@ -376,12 +370,17 @@ if __name__ == "__main__":
 
     # Preprocess data.
     print("Processing scenes...")
-    pool = ProcessPoolExecutor(max_workers=config.num_workers)
-    _ = list(
-        pool.map(
-            handle_process,
-            file_list,
-            repeat(config.output_root),
-            repeat(test_frame_list),
-        )
-    )
+    with ProcessPoolExecutor(max_workers=config.num_workers) as pool:
+        try:
+            list(
+                pool.map(
+                    handle_process,
+                    file_list,
+                    repeat(config.output_root),
+                    repeat(test_frame_list),
+                )
+            )
+        except Exception as e:
+            print(f"An error occurred during processing: {e}")
+
+    print("Processing complete.")

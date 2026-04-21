@@ -40,7 +40,7 @@ class OctreeT(Octree):
         nempty: bool = True,
         max_depth: Optional[int] = None,
         start_depth: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(octree.depth, octree.full_depth)
         self.__dict__.update(octree.__dict__)
@@ -119,7 +119,7 @@ class MLP(torch.nn.Module):
         out_features: Optional[int] = None,
         activation=torch.nn.GELU,
         drop: float = 0.0,
-        **kwargs
+        **kwargs,
     ):
         super().__init__()
         self.in_features = in_features
@@ -287,7 +287,7 @@ class OctFormerBlock(torch.nn.Module):
         drop_path: float = 0.0,
         nempty: bool = True,
         activation: torch.nn.Module = torch.nn.GELU,
-        **kwargs
+        **kwargs,
     ):
         super().__init__()
         self.norm1 = torch.nn.LayerNorm(dim)
@@ -334,7 +334,7 @@ class OctFormerStage(torch.nn.Module):
         use_checkpoint: bool = True,
         num_blocks: int = 2,
         octformer_block=OctFormerBlock,
-        **kwargs
+        **kwargs,
     ):
         super().__init__()
         self.num_blocks = num_blocks
@@ -434,7 +434,7 @@ class PatchEmbed(torch.nn.Module):
         dim: int = 96,
         num_down: int = 2,
         nempty: bool = True,
-        **kwargs
+        **kwargs,
     ):
         super().__init__()
         self.num_stages = num_down

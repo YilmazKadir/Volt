@@ -77,12 +77,20 @@ class NuScenesDataset(DefaultDataset):
             segment = np.vectorize(self.learning_map.__getitem__)(segment).astype(
                 np.int64
             )
+            gt_panoptic_path = os.path.join(
+                self.data_root, "raw", data["gt_panoptic_path"]
+            )
+            instance = np.load(gt_panoptic_path)["data"] % 1000
+            # make instance ids start from 0
+            instance = instance.astype(np.int64) - 1
         else:
             segment = np.ones((points.shape[0],), dtype=np.int64) * self.ignore_index
+            instance = np.ones((points.shape[0],), dtype=np.int64) * self.ignore_index
         data_dict = dict(
             coord=coord,
             strength=strength,
             segment=segment,
+            instance=instance,
             name=self.get_data_name(idx),
         )
         return data_dict

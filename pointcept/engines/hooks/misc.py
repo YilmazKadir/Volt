@@ -198,6 +198,11 @@ class CheckpointSaver(HookBase):
                 {
                     "epoch": self.trainer.epoch + 1,
                     "state_dict": self.trainer.model.state_dict(),
+                    "ema_state_dict": (
+                        self.trainer.ema.state_dict()
+                        if self.trainer.cfg.use_ema
+                        else None
+                    ),
                     "optimizer": self.trainer.optimizer.state_dict(),
                     "scheduler": self.trainer.scheduler.state_dict(),
                     "scaler": (
@@ -260,6 +265,24 @@ class CheckpointLoader(HookBase):
                 weight, strict=self.strict
             )
             self.trainer.logger.info(f"Missing keys: {load_state_info[0]}")
+
+            # Restore EMA state if it was saved
+            if self.trainer.cfg.use_ema:
+                self.trainer.logger.info("Restoring EMA state from checkpoint")
+                weight = OrderedDict()
+                for key, value in checkpoint["ema_state_dict"].items():
+                    if not key.startswith("module."):
+                        key = "module." + key  # xxx.xxx -> module.xxx.xxx
+                    # Now all keys contain "module." no matter DDP or not.
+                    if self.keywords in key:
+                        key = key.replace(self.keywords, self.replacement, 1)
+                    key = key[7:]  # module.xxx.xxx -> xxx.xxx
+                    weight[key] = value
+                load_state_info = self.trainer.ema.load_state_dict(
+                    weight, strict=self.strict
+                )
+                self.trainer.logger.info(f"EMA missing keys: {load_state_info[0]}")
+
             if self.trainer.cfg.resume:
                 self.trainer.logger.info(
                     f"Resuming train at eval epoch: {checkpoint['epoch']}"
@@ -296,9 +319,14 @@ class PreciseEvaluator(HookBase):
             best_path = os.path.join(
                 self.trainer.cfg.save_path, "model", "model_best.pth"
             )
-            checkpoint = torch.load(best_path, weights_only=False)
+            checkpoint = torch.load(best_path, map_location="cpu", weights_only=False)
             weight = OrderedDict()
-            for key, value in checkpoint["state_dict"].items():
+            state_dict = (
+                checkpoint["ema_state_dict"]
+                if cfg.use_ema
+                else checkpoint["state_dict"]
+            )
+            for key, value in state_dict.items():
                 if not key.startswith("module."):
                     key = "module." + key  # xxx.xxx -> module.xxx.xxx
                 # Now all keys contain "module." no matter DDP or not.

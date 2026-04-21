@@ -1,0 +1,14 @@
+[project]
+name = "pointseg"
+version = "1.0"
+dependencies = [
+    "torch",
+]
+
+[build-system]
+requires = [
+    "setuptools",
+    "wheel",
+    "torch",
+]
+build-backend = "setuptools.build_meta"

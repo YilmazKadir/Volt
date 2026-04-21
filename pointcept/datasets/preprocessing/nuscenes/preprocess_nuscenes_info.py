@@ -487,7 +487,9 @@ def fill_trainval_infos(
 
             # processing gt segment
             segment_path = nusc.get("lidarseg", ref_sd_token)["filename"]
+            panoptic_path = nusc.get("panoptic", ref_sd_token)["filename"]
             info["gt_segment_path"] = segment_path
+            info["gt_panoptic_path"] = panoptic_path
 
         if sample["scene_token"] in train_scenes:
             train_nusc_infos.append(info)

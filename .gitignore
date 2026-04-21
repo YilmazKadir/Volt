@@ -5,8 +5,10 @@ __pycache__
 **/dist/
 *.so
 exp
-weights
-data
+weights/*
+!weights/.gitkeep
+data/*
+!data/.gitkeep
 *log*
 outputs/
 .vscode
@@ -14,3 +16,4 @@ outputs/
 */.DS_Store
 **/*.out
 Dockerfile
+wandb/

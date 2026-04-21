@@ -83,8 +83,18 @@ then
   WEIGHT=$MODEL_DIR/model_last.pth
 else
   RESUME=false
-  mkdir -p "$MODEL_DIR" "$CODE_DIR"
-  cp -r scripts tools pointcept "$CODE_DIR"
+  if [ ${SLURM_NODEID:-0} -eq 0 ]; then
+    mkdir -p "$MODEL_DIR" "$CODE_DIR"
+    cp -r scripts tools pointcept "$CODE_DIR"
+    # Signal that copying is done
+    sync
+    touch "$EXP_DIR/.copy_done"
+  else
+    # Wait for the master node to finish copying
+    while [ ! -f "$EXP_DIR/.copy_done" ]; do
+      sleep 1
+    done
+  fi
 fi
 
 echo "Loading config in:" $CONFIG_DIR

@@ -5,6 +5,7 @@ Author: Xiaoyang Wu (xiaoyang.wu.cs@gmail.com)
 Please cite our work if the code is helpful to you.
 """
 
+import copy
 import os
 import sys
 import weakref
@@ -12,7 +13,6 @@ import wandb
 import torch
 import torch.nn as nn
 import torch.utils.data
-from packaging import version
 from functools import partial
 from pathlib import Path
 
@@ -22,7 +22,7 @@ else:
     from collections import Iterator
 from tensorboardX import SummaryWriter
 
-from .defaults import create_ddp_model, worker_init_fn
+from .defaults import create_ddp_model, worker_init_fn, AMP_DTYPE
 from .hooks import HookBase, build_hooks
 import pointcept.utils.comm as comm
 from pointcept.datasets import build_dataset, point_collate_fn, collate_fn
@@ -33,11 +33,13 @@ from pointcept.utils.scheduler import build_scheduler
 from pointcept.utils.events import EventStorage, ExceptionWriter
 from pointcept.utils.registry import Registry
 
+# SPCONV_USE_DIRECT_TABLE is set to False to make sure indices are sorted.
+# See https://github.com/traveller59/spconv/issues/592
+import spconv as spconv_real
+
+spconv_real.constants.SPCONV_USE_DIRECT_TABLE = False
+
 TRAINERS = Registry("trainers")
-AMP_DTYPE = dict(
-    float16=torch.float16,
-    bfloat16=torch.bfloat16,
-)
 
 
 class TrainerBase:
@@ -138,6 +140,7 @@ class Trainer(TrainerBase):
         self.logger.info(f"Config:\n{cfg.pretty_text}")
         self.logger.info("=> Building model ...")
         self.model = self.build_model()
+        self.ema = self.build_ema() if cfg.use_ema else None
         self.logger.info("=> Building writer ...")
         self.writer = self.build_writer()
         self.logger.info("=> Building train dataset & dataloader ...")
@@ -181,12 +184,6 @@ class Trainer(TrainerBase):
             self.after_train()
 
     def run_step(self):
-        if version.parse(torch.__version__) >= version.parse("2.4"):
-            auto_cast = partial(torch.amp.autocast, device_type="cuda")
-        else:
-            # deprecated warning
-            auto_cast = torch.cuda.amp.autocast
-
         input_dict = self.comm_info["input_dict"]
         for key in input_dict.keys():
             if isinstance(input_dict[key], torch.Tensor):
@@ -197,8 +194,8 @@ class Trainer(TrainerBase):
             self.optimizer.zero_grad()
 
         # Forward pass
-        with auto_cast(
-            enabled=self.cfg.enable_amp, dtype=AMP_DTYPE[self.cfg.amp_dtype]
+        with torch.amp.autocast(
+            "cuda", enabled=self.cfg.enable_amp, dtype=AMP_DTYPE[self.cfg.amp_dtype]
         ):
             output_dict = self.model(input_dict)
             loss = (
@@ -228,6 +225,7 @@ class Trainer(TrainerBase):
                 self.scaler.update()
                 if scale <= self.scaler.get_scale():
                     self.scheduler.step()
+                    self.update_ema()
             else:
                 if self.cfg.clip_grad is not None:
                     torch.nn.utils.clip_grad_norm_(
@@ -235,6 +233,7 @@ class Trainer(TrainerBase):
                     )
                 self.optimizer.step()
                 self.scheduler.step()
+                self.update_ema()
 
             # Reset grad accumulation counter
             self._gradient_accumulation_counter = 0
@@ -264,6 +263,35 @@ class Trainer(TrainerBase):
         )
         return model
 
+    def build_ema(self):
+        # Don't deepcopy DDP wrapper; it can share param tensors with the original.
+        model = (
+            self.model.module
+            if isinstance(self.model, torch.nn.parallel.DistributedDataParallel)
+            else self.model
+        )
+        ema = copy.deepcopy(model)
+        ema.eval()
+        for p in ema.parameters():
+            p.requires_grad = False
+        return ema
+
+    @torch.no_grad()
+    def update_ema(self):
+        if self.ema is None:
+            return
+        decay = self.cfg.ema_decay
+        model = (
+            self.model.module
+            if isinstance(self.model, torch.nn.parallel.DistributedDataParallel)
+            else self.model
+        )
+        for p_ema, p in zip(self.ema.parameters(), model.parameters()):
+            p_ema.mul_(decay).add_(p, alpha=1.0 - decay)
+
+        for b_ema, b in zip(self.ema.buffers(), model.buffers()):
+            b_ema.copy_(b)
+
     def build_writer(self):
         writer = SummaryWriter(self.cfg.save_path) if comm.is_main_process() else None
         self.logger.info(f"Tensorboard writer logging dir: {self.cfg.save_path}")
@@ -273,7 +301,6 @@ class Trainer(TrainerBase):
                 project=self.cfg.wandb_project,
                 name=f"{tag}/{name}",
                 tags=[tag],
-                dir=self.cfg.save_path,
                 settings=wandb.Settings(api_key=self.cfg.wandb_key),
                 config=self.cfg,
             )
@@ -283,7 +310,9 @@ class Trainer(TrainerBase):
         train_data = build_dataset(self.cfg.data.train)
 
         if comm.get_world_size() > 1:
-            train_sampler = torch.utils.data.distributed.DistributedSampler(train_data)
+            train_sampler = torch.utils.data.distributed.DistributedSampler(
+                train_data, seed=self.cfg.seed
+            )
         else:
             train_sampler = None
 
@@ -317,7 +346,9 @@ class Trainer(TrainerBase):
         if self.cfg.evaluate:
             val_data = build_dataset(self.cfg.data.val)
             if comm.get_world_size() > 1:
-                val_sampler = torch.utils.data.distributed.DistributedSampler(val_data)
+                val_sampler = torch.utils.data.distributed.DistributedSampler(
+                    val_data, shuffle=False
+                )
             else:
                 val_sampler = None
             val_loader = torch.utils.data.DataLoader(
@@ -328,6 +359,7 @@ class Trainer(TrainerBase):
                 pin_memory=True,
                 sampler=val_sampler,
                 collate_fn=collate_fn,
+                persistent_workers=True,
             )
         return val_loader
 
@@ -345,12 +377,7 @@ class Trainer(TrainerBase):
         return build_scheduler(self.cfg.scheduler, self.optimizer)
 
     def build_scaler(self):
-        if version.parse(torch.__version__) >= version.parse("2.4"):
-            grad_scaler = partial(torch.amp.GradScaler, device="cuda")
-        else:
-            # deprecated warning
-            grad_scaler = torch.cuda.amp.GradScaler
-        scaler = grad_scaler() if self.cfg.enable_amp else None
+        scaler = torch.amp.GradScaler(device="cuda") if self.cfg.enable_amp else None
         return scaler
 
 

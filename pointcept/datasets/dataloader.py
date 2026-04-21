@@ -41,12 +41,12 @@ class MultiDatasetDataloader:
             dataset.loop = 1
         # determine union training epoch by main dataset
         self.datasets[0].loop = concat_dataset.loop
-        # build sub-dataloaders
-        num_workers = num_worker_per_gpu // len(self.datasets)
         self.dataloaders = []
         for dataset_id, dataset in enumerate(self.datasets):
             if comm.get_world_size() > 1:
-                sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+                sampler = torch.utils.data.distributed.DistributedSampler(
+                    dataset, seed=seed
+                )
             else:
                 sampler = None
 
@@ -54,7 +54,7 @@ class MultiDatasetDataloader:
                 partial(
                     self._worker_init_fn,
                     dataset_id=dataset_id,
-                    num_workers=num_workers,
+                    num_workers=num_worker_per_gpu,
                     num_datasets=len(self.datasets),
                     rank=comm.get_rank(),
                     seed=seed,

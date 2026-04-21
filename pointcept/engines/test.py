@@ -15,8 +15,9 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 import torch.utils.data
+import wandb
 
-from .defaults import create_ddp_model
+from .defaults import create_ddp_model, AMP_DTYPE
 import pointcept.utils.comm as comm
 from pointcept.datasets import build_dataset, collate_fn
 from pointcept.models import build_model
@@ -34,6 +35,11 @@ try:
 except:
     pointops = None
 
+# SPCONV_USE_DIRECT_TABLE is set to False to make sure indices are sorted.
+# See https://github.com/traveller59/spconv/issues/592
+import spconv as spconv_real
+
+spconv_real.constants.SPCONV_USE_DIRECT_TABLE = False
 
 TESTERS = Registry("testers")
 
@@ -76,7 +82,12 @@ class TesterBase:
             self.logger.info(f"Loading weight at: {self.cfg.weight}")
             checkpoint = torch.load(self.cfg.weight, weights_only=False)
             weight = OrderedDict()
-            for key, value in checkpoint["state_dict"].items():
+            state_dict = (
+                checkpoint["ema_state_dict"]
+                if self.cfg.use_ema
+                else checkpoint["state_dict"]
+            )
+            for key, value in state_dict.items():
                 if key.startswith("module."):
                     if comm.get_world_size() == 1:
                         key = key[7:]  # module.xxx.xxx -> xxx.xxx
@@ -195,7 +206,12 @@ class SemSegTester(TesterBase):
                             input_dict[key] = input_dict[key].cuda(non_blocking=True)
                     idx_part = input_dict["index"]
                     with torch.no_grad():
-                        pred_part = self.model(input_dict)["seg_logits"]  # (n, k)
+                        with torch.amp.autocast(
+                            "cuda",
+                            enabled=self.cfg.enable_amp,
+                            dtype=AMP_DTYPE[self.cfg.amp_dtype],
+                        ):
+                            pred_part = self.model(input_dict)["seg_logits"]  # (n, k)
                         pred_part = F.softmax(pred_part, -1)
                         if self.cfg.empty_cache:
                             torch.cuda.empty_cache()
@@ -342,6 +358,16 @@ class SemSegTester(TesterBase):
                     mIoU, mAcc, allAcc
                 )
             )
+            if self.cfg.enable_wandb:
+                wandb.log(
+                    {
+                        "test/mIoU": mIoU,
+                        "test/mAcc": mAcc,
+                        "test/allAcc": allAcc,
+                    },
+                    step=wandb.run.step,
+                )
+
             for i in range(self.cfg.data.num_classes):
                 logger.info(
                     "Class_{idx} - {name} Result: iou/accuracy {iou:.4f}/{accuracy:.4f}".format(
@@ -440,7 +466,12 @@ class DINOSemSegTester(TesterBase):
                     input_dict["dino_offset"] = dino_offset
                     idx_part = input_dict["index"]
                     with torch.no_grad():
-                        pred_part = self.model(input_dict)["seg_logits"]  # (n, k)
+                        with torch.amp.autocast(
+                            "cuda",
+                            enabled=self.cfg.enable_amp,
+                            dtype=AMP_DTYPE[self.cfg.amp_dtype],
+                        ):
+                            pred_part = self.model(input_dict)["seg_logits"]  # (n, k)
                         pred_part = F.softmax(pred_part, -1)
                         if self.cfg.empty_cache:
                             torch.cuda.empty_cache()
@@ -620,7 +651,12 @@ class ClsTester(TesterBase):
                     input_dict[key] = input_dict[key].cuda(non_blocking=True)
             end = time.time()
             with torch.no_grad():
-                output_dict = self.model(input_dict)
+                with torch.amp.autocast(
+                    "cuda",
+                    enabled=self.cfg.enable_amp,
+                    dtype=AMP_DTYPE[self.cfg.amp_dtype],
+                ):
+                    output_dict = self.model(input_dict)
             output = output_dict["cls_logits"]
             pred = output.max(1)[1]
             label = input_dict["category"]
@@ -738,9 +774,13 @@ class ClsVotingTester(TesterBase):
                 if isinstance(input_dict[key], torch.Tensor):
                     input_dict[key] = input_dict[key].cuda(non_blocking=True)
             with torch.no_grad():
-                pred = F.softmax(self.model(input_dict)["cls_logits"], -1).sum(
-                    0, keepdim=True
-                )
+                with torch.amp.autocast(
+                    "cuda",
+                    enabled=self.cfg.enable_amp,
+                    dtype=AMP_DTYPE[self.cfg.amp_dtype],
+                ):
+                    pred_part = self.model(input_dict)["cls_logits"]
+                pred = F.softmax(pred_part, -1).sum(0, keepdim=True)
             pred = pred.max(1)[1].cpu().numpy()
             intersection, union, target = intersection_and_union(
                 pred, category, self.cfg.data.num_classes, self.cfg.data.ignore_index
@@ -832,7 +872,12 @@ class PartSegTester(TesterBase):
                     if isinstance(input_dict[key], torch.Tensor):
                         input_dict[key] = input_dict[key].cuda(non_blocking=True)
                 with torch.no_grad():
-                    pred_part = self.model(input_dict)["cls_logits"]
+                    with torch.amp.autocast(
+                        "cuda",
+                        enabled=self.cfg.enable_amp,
+                        dtype=AMP_DTYPE[self.cfg.amp_dtype],
+                    ):
+                        pred_part = self.model(input_dict)["cls_logits"]
                     pred_part = F.softmax(pred_part, -1)
                 if self.cfg.empty_cache:
                     torch.cuda.empty_cache()
@@ -931,7 +976,12 @@ class InsSegTester(TesterBase):
                 if isinstance(data_dict[key], torch.Tensor):
                     data_dict[key] = data_dict[key].cuda(non_blocking=True)
             with torch.no_grad():
-                output_dict = self.model(data_dict)
+                with torch.amp.autocast(
+                    "cuda",
+                    enabled=self.cfg.enable_amp,
+                    dtype=AMP_DTYPE[self.cfg.amp_dtype],
+                ):
+                    output_dict = self.model(data_dict)
                 segment = data_dict["segment"]
                 instance = data_dict["instance"]
 

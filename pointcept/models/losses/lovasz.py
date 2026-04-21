@@ -102,7 +102,7 @@ def _lovasz_softmax(
         loss = mean(
             _lovasz_softmax_flat(
                 *_flatten_probas(prob.unsqueeze(0), lab.unsqueeze(0), ignore),
-                classes=classes
+                classes=classes,
             )
             for prob, lab in zip(probas, labels)
         )
@@ -110,7 +110,7 @@ def _lovasz_softmax(
         loss = _lovasz_softmax_flat(
             *_flatten_probas(probas, labels, ignore),
             classes=classes,
-            class_seen=class_seen
+            class_seen=class_seen,
         )
     return loss
 
@@ -124,7 +124,7 @@ def _lovasz_softmax_flat(probas, labels, classes="present", class_seen=None):
     """
     if probas.numel() == 0:
         # only void pixels, the gradients should be 0
-        return probas * 0.0
+        return probas.sum() * 0.0
     C = probas.size(1)
     losses = []
     class_to_sum = list(range(C)) if classes in ["all", "present"] else classes

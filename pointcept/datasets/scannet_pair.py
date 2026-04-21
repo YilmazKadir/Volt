@@ -28,7 +28,7 @@ class ScanNetPairDataset(Dataset):
         view1_transform=None,
         view2_transform=None,
         loop=1,
-        **kwargs
+        **kwargs,
     ):
         super(ScanNetPairDataset, self).__init__()
         self.data_root = data_root

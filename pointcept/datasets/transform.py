@@ -16,6 +16,8 @@ import torch
 from torchvision import transforms
 import copy
 from collections.abc import Sequence, Mapping
+import h5py
+
 from pointcept.utils.registry import Registry
 
 TRANSFORMS = Registry("transforms")
@@ -209,6 +211,28 @@ class PointClip(object):
                 a_min=self.point_cloud_range[:3],
                 a_max=self.point_cloud_range[3:],
             )
+        return data_dict
+
+
+@TRANSFORMS.register_module()
+class PointClipDistance(object):
+    def __init__(self, max_dist=50.0, z_min=-4.0, z_max=2.0):
+        self.max_dist = float(max_dist)
+        self.z_min = z_min
+        self.z_max = z_max
+
+    def __call__(self, data_dict):
+        if "coord" in data_dict:
+            r = np.linalg.norm(data_dict["coord"], axis=1)
+
+            r_clipped = np.minimum(r, self.max_dist)
+            scale = (r_clipped / r).astype(np.float32)
+
+            data_dict["coord"] = data_dict["coord"] * scale[:, np.newaxis]
+            data_dict["coord"][:, 2] = np.clip(
+                data_dict["coord"][:, 2], self.z_min, self.z_max
+            )
+
         return data_dict
 
 
@@ -987,12 +1011,12 @@ class SphereCrop(object):
     def __init__(self, point_max=80000, sample_rate=None, mode="random"):
         self.point_max = point_max
         self.sample_rate = sample_rate
-        assert mode in ["random", "center", "all", "given"]
+        assert mode in ["random", "center", "all"]
         self.mode = mode
 
     def __call__(self, data_dict):
         point_max = (
-            int(self.sample_rate * data_dict["coord"].shape[0])
+            int(np.random.uniform(self.sample_rate, 1) * data_dict["coord"].shape[0])
             if self.sample_rate is not None
             else self.point_max
         )
@@ -1005,26 +1029,30 @@ class SphereCrop(object):
                 ]
             elif self.mode == "center":
                 center = data_dict["coord"][data_dict["coord"].shape[0] // 2]
-            elif self.mode == "given":
-                given_index = data_dict["correspondence"].reshape(
-                    data_dict["correspondence"].shape[0], -1
-                )
-                given_index = np.all(
-                    given_index != np.ones_like(given_index[0]) * -1, axis=1
-                )
-                given_coord = data_dict["coord"][given_index]
-                if given_coord.shape[0] == 0:
-                    center = data_dict["coord"][
-                        np.random.randint(data_dict["coord"].shape[0])
-                    ]
-                else:
-                    center = np.mean(given_coord, axis=0)
             else:
                 raise NotImplementedError
             idx_crop = np.argsort(np.sum(np.square(data_dict["coord"] - center), 1))[
                 :point_max
             ]
             data_dict = index_operator(data_dict, idx_crop)
+        return data_dict
+
+
+@TRANSFORMS.register_module()
+class Subsample(object):
+    def __init__(self, num_points=102400):
+        self.num_points = num_points
+
+    def __call__(self, data_dict):
+        assert "coord" in data_dict.keys()
+        N = data_dict["coord"].shape[0]
+
+        if N >= self.num_points:
+            idx = np.random.choice(N, self.num_points, replace=False)
+        else:
+            idx = np.random.choice(N, self.num_points, replace=True)
+
+        data_dict = index_operator(data_dict, idx)
         return data_dict
 
 
@@ -1298,6 +1326,331 @@ class InstanceParser(object):
         data_dict["instance"] = instance
         data_dict["instance_centroid"] = centroid
         data_dict["bbox"] = bbox
+        return data_dict
+
+
+@TRANSFORMS.register_module()
+class InstanceRotate(object):
+    def __init__(self, angle=(-1, 1), axis="z", p=0.5, segment_ignore_index=-1):
+        self.angle = angle
+        self.axis = axis
+        self.p = p
+        self.segment_ignore_index = segment_ignore_index
+
+    def __call__(self, data_dict):
+        inst_masks = Get_Instance_Masks(data_dict, self.segment_ignore_index, self.p)
+        has_normals = "normal" in data_dict.keys()
+
+        for inst_mask in inst_masks:
+            angle = np.random.uniform(self.angle[0], self.angle[1]) * np.pi
+            rot_cos, rot_sin = np.cos(angle), np.sin(angle)
+            if self.axis == "x":
+                rot_t = np.array(
+                    [[1, 0, 0], [0, rot_cos, -rot_sin], [0, rot_sin, rot_cos]]
+                )
+            elif self.axis == "y":
+                rot_t = np.array(
+                    [[rot_cos, 0, rot_sin], [0, 1, 0], [-rot_sin, 0, rot_cos]]
+                )
+            elif self.axis == "z":
+                rot_t = np.array(
+                    [[rot_cos, -rot_sin, 0], [rot_sin, rot_cos, 0], [0, 0, 1]]
+                )
+            else:
+                raise NotImplementedError
+            coords = data_dict["coord"][inst_mask]
+            center = coords.mean(axis=0)
+            rotated = np.dot(coords - center, np.transpose(rot_t)) + center
+            data_dict["coord"][inst_mask] = rotated
+            if has_normals:
+                data_dict["normal"][inst_mask] = np.dot(
+                    data_dict["normal"][inst_mask], np.transpose(rot_t)
+                )
+        return data_dict
+
+
+@TRANSFORMS.register_module()
+class InstanceShift(object):
+    def __init__(self, shift_range=[0, 0, 0], p=0.5, segment_ignore_index=-1):
+        self.shift_range = shift_range
+        self.p = p
+        self.segment_ignore_index = segment_ignore_index
+
+    def __call__(self, data_dict):
+        inst_masks = Get_Instance_Masks(data_dict, self.segment_ignore_index, self.p)
+
+        for inst_mask in inst_masks:
+            shift_x = np.random.uniform(-self.shift_range[0], self.shift_range[0])
+            shift_y = np.random.uniform(-self.shift_range[1], self.shift_range[1])
+            shift_z = np.random.uniform(-self.shift_range[2], self.shift_range[2])
+            data_dict["coord"][inst_mask] += [shift_x, shift_y, shift_z]
+        return data_dict
+
+
+@TRANSFORMS.register_module()
+class InstanceFlip(object):
+    def __init__(self, flip_prob=0.5, p=0.5, segment_ignore_index=-1):
+        self.flip_prob = flip_prob
+        self.p = p
+        self.segment_ignore_index = segment_ignore_index
+
+    def __call__(self, data_dict):
+        inst_masks = Get_Instance_Masks(data_dict, self.segment_ignore_index, self.p)
+        has_normals = "normal" in data_dict.keys()
+
+        for inst_mask in inst_masks:
+            coords = data_dict["coord"][inst_mask]
+            center = coords.mean(axis=0)
+            centered = coords - center
+            if np.random.rand() < self.flip_prob:
+                centered[:, 0] = -centered[:, 0]
+                if has_normals:
+                    data_dict["normal"][inst_mask, 0] = -data_dict["normal"][
+                        inst_mask, 0
+                    ]
+            if np.random.rand() < self.flip_prob:
+                centered[:, 1] = -centered[:, 1]
+                if has_normals:
+                    data_dict["normal"][inst_mask, 1] = -data_dict["normal"][
+                        inst_mask, 1
+                    ]
+            data_dict["coord"][inst_mask] = centered + center
+        return data_dict
+
+
+@TRANSFORMS.register_module()
+class InstanceScale(object):
+    def __init__(self, scale=(0.95, 1.05), p=0.5, segment_ignore_index=-1):
+        self.scale = scale
+        self.p = p
+        self.segment_ignore_index = segment_ignore_index
+
+    def __call__(self, data_dict):
+        inst_masks = Get_Instance_Masks(data_dict, self.segment_ignore_index, self.p)
+
+        for inst_mask in inst_masks:
+            coords = data_dict["coord"][inst_mask]
+            center = coords.mean(axis=0)
+            scale = np.random.uniform(self.scale[0], self.scale[1])
+            data_dict["coord"][inst_mask] = (coords - center) * scale + center
+        return data_dict
+
+
+@TRANSFORMS.register_module()
+class InstanceCrop(object):
+    def __init__(
+        self,
+        crop_ratio=(0.3, 0.8),
+        p=0.5,
+        segment_ignore_index=-1,
+        instance_ignore_index=-1,
+    ):
+        self.crop_ratio = crop_ratio
+        self.p = p
+        self.segment_ignore_index = segment_ignore_index
+        self.instance_ignore_index = instance_ignore_index
+
+    def __call__(self, data_dict):
+        inst_masks = Get_Instance_Masks(data_dict, self.segment_ignore_index, self.p)
+        if len(inst_masks) == 0:
+            return data_dict
+
+        for inst_mask in inst_masks:
+            indices = np.where(inst_mask)[0]
+            if indices.size == 0:
+                continue
+            coords = data_dict["coord"][indices]
+            bbox_min = coords.min(axis=0)
+            bbox_max = coords.max(axis=0)
+            bbox_size = bbox_max - bbox_min
+            if np.all(bbox_size == 0):
+                continue
+
+            crop_ratio = np.random.uniform(self.crop_ratio[0], self.crop_ratio[1], 3)
+            crop_size = bbox_size * crop_ratio
+            available = np.maximum(bbox_size - crop_size, 0.0)
+            start = bbox_min + np.random.rand(3) * available
+            end = start + crop_size
+
+            inside = np.all(
+                (coords >= start) & (coords <= end),
+                axis=1,
+            )
+            outside_indices = indices[~inside]
+            if outside_indices.size == 0:
+                continue
+            data_dict["segment"][outside_indices] = self.segment_ignore_index
+            if "instance" in data_dict:
+                data_dict["instance"][outside_indices] = self.instance_ignore_index
+        return data_dict
+
+
+@TRANSFORMS.register_module()
+class InstanceDropOut(object):
+    def __init__(
+        self,
+        drop_ratio=0.6,
+        p=0.5,
+        segment_ignore_index=-1,
+        instance_ignore_index=-1,
+    ):
+        self.drop_ratio = drop_ratio
+        self.p = p
+        self.segment_ignore_index = segment_ignore_index
+        self.instance_ignore_index = instance_ignore_index
+
+    def __call__(self, data_dict):
+        inst_masks = Get_Instance_Masks(data_dict, self.segment_ignore_index, self.p)
+        has_instance = "instance" in data_dict.keys()
+
+        for inst_mask in inst_masks:
+            indices = np.where(inst_mask)[0]
+            drop_count = int(len(indices) * self.drop_ratio)
+            drop_indices = np.random.choice(indices, drop_count, replace=False)
+            data_dict["segment"][drop_indices] = self.segment_ignore_index
+            if has_instance:
+                data_dict["instance"][drop_indices] = self.instance_ignore_index
+        return data_dict
+
+
+@TRANSFORMS.register_module()
+class InstanceColorDropout(object):
+    def __init__(
+        self,
+        drop_value=0,
+        p=0.5,
+        segment_ignore_index=-1,
+    ):
+        self.drop_value = drop_value
+        self.p = p
+        self.segment_ignore_index = segment_ignore_index
+
+    def __call__(self, data_dict):
+        if "color" not in data_dict:
+            return data_dict
+        inst_masks = Get_Instance_Masks(data_dict, self.segment_ignore_index, self.p)
+        if len(inst_masks) == 0:
+            return data_dict
+
+        for inst_mask in inst_masks:
+            indices = np.where(inst_mask)[0]
+            if indices.size == 0:
+                continue
+            data_dict["color"][indices] = self.drop_value
+        return data_dict
+
+
+@TRANSFORMS.register_module()
+class SwapInstances(object):
+    def __init__(self, p=0.5, segment_ignore_index=-1):
+        self.p = p
+        self.segment_ignore_index = segment_ignore_index
+
+    def __call__(self, data_dict):
+        inst_masks = Get_Instance_Masks(data_dict, self.segment_ignore_index, 1.0)
+
+        np.random.shuffle(inst_masks)
+        pair_count = len(inst_masks) // 2
+
+        for pair_idx in range(pair_count):
+            if np.random.rand() >= self.p:
+                continue
+
+            inst_mask1 = inst_masks[2 * pair_idx]
+            inst_mask2 = inst_masks[2 * pair_idx + 1]
+            coords1 = data_dict["coord"][inst_mask1].copy()
+            coords2 = data_dict["coord"][inst_mask2].copy()
+            mid_1 = coords1.mean(axis=0)
+            mid_2 = coords2.mean(axis=0)
+            offset = mid_2 - mid_1
+
+            data_dict["coord"][inst_mask1] = coords1 + offset
+            data_dict["coord"][inst_mask2] = coords2 - offset
+        return data_dict
+
+
+def Get_Instance_Masks(data_dict, segment_ignore_index=-1, p=0.5):
+    instance = data_dict["instance"]
+    segment = data_dict["segment"]
+
+    valid_mask = segment != segment_ignore_index
+    instance_ids = np.unique(instance[valid_mask])
+    instance_ids = instance_ids[instance_ids >= 0]
+
+    if len(instance_ids) == 0:
+        return []
+
+    mask_to_transform = np.random.rand(len(instance_ids)) < p
+    chosen_ids = instance_ids[mask_to_transform]
+
+    inst_masks = []
+    for inst_id in chosen_ids:
+        inst_mask = instance == inst_id
+        # assert segment[inst_mask].min() == segment[inst_mask].max()
+        inst_masks.append(inst_mask)
+
+    return inst_masks
+
+
+@TRANSFORMS.register_module()
+class InstanceCutMix(object):
+    def __init__(self, db_path, num_instances=10, classes=[0, 1, 2, 3, 4, 5, 6, 7]):
+        self.db_path = db_path
+        self.num_instances = num_instances
+        self.classes = classes
+
+        # Open HDF5 once
+        self.h5f = None
+        self.counts = {}
+
+    def __call__(self, data_dict):
+        # Lazy load HDF5 for multiprocessing compatibility
+        if self.h5f is None:
+            self.h5f = h5py.File(self.db_path, "r")
+            # Cache the counts once
+            for cls in self.classes:
+                self.counts[cls] = self.h5f[f"class_{cls}"].attrs["count"]
+
+        new_ins_id = data_dict["instance"].max() + 1
+
+        for _ in range(self.num_instances):
+            # sample a class
+            cls = np.random.choice(self.classes)
+
+            # sample an instance from the class
+            idx = np.random.randint(0, self.counts[cls])
+            data = self.h5f[f"class_{cls}"][str(idx)][...]
+
+            inst_coord = data[:, :3].copy()
+            inst_strength = data[:, 3:4].copy()
+
+            # Random yaw rotation
+            dyaw = np.random.uniform(-np.pi, np.pi)
+            c, s = np.cos(dyaw), np.sin(dyaw)
+            R = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32)
+            inst_coord = inst_coord @ R.T
+
+            # Random scale
+            scale = np.random.uniform(0.9, 1.1)
+            inst_centroid = inst_coord.mean(axis=0)
+            inst_coord = (inst_coord - inst_centroid) * scale + inst_centroid
+
+            # Radially shift
+            r_scale = np.random.uniform(0.5, 2.0)
+            shift = inst_centroid[0:2] * (r_scale - 1)
+            inst_coord[:, 0:2] = inst_coord[:, 0:2] + shift
+
+            # Instance and semantic labels
+            inst_instance = np.full(len(inst_coord), new_ins_id, dtype=np.int32)
+            inst_segment = np.full(len(inst_coord), cls, dtype=np.int32)
+            new_ins_id += 1
+
+            # Concatenate into scene
+            data_dict["coord"] = np.vstack([data_dict["coord"], inst_coord])
+            data_dict["strength"] = np.vstack([data_dict["strength"], inst_strength])
+            data_dict["segment"] = np.hstack([data_dict["segment"], inst_segment])
+            data_dict["instance"] = np.hstack([data_dict["instance"], inst_instance])
+
         return data_dict
 
 

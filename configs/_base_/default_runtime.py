@@ -13,6 +13,8 @@ batch_size_test = None  # auto adapt to bs 1 for each gpu
 epoch = 100  # total epoch, data loop = epoch // eval_epoch
 eval_epoch = 100  # sche total eval & checkpoint epoch
 clip_grad = None  # disable with None, enable with a float
+use_ema = False
+ema_decay = 0.999
 
 sync_bn = False
 enable_amp = False
@@ -22,7 +24,7 @@ empty_cache_per_epoch = False
 find_unused_parameters = False
 
 enable_wandb = True
-wandb_project = "pointcept"  # custom your project name e.g. Sonata, PTv3
+wandb_project = "Volt"  # custom your project name e.g. Sonata, PTv3
 wandb_key = None  # wandb token, default is None. If None, login with `wandb login` in your terminal
 
 mix_prob = 0

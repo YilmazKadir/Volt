@@ -11,12 +11,18 @@ import os
 import sys
 import argparse
 import multiprocessing as mp
+import torch
 from torch.nn.parallel import DistributedDataParallel
 
 
 import pointcept.utils.comm as comm
 from pointcept.utils.env import get_random_seed, set_seed
 from pointcept.utils.config import Config, DictAction
+
+AMP_DTYPE = dict(
+    float16=torch.float16,
+    bfloat16=torch.bfloat16,
+)
 
 
 def create_ddp_model(model, *, fp16_compression=False, **kwargs):

@@ -13,6 +13,7 @@ import pointops
 from uuid import uuid4
 
 import pointcept.utils.comm as comm
+from pointcept.engines.defaults import AMP_DTYPE
 from pointcept.utils.misc import intersection_and_union_gpu
 
 from .default import HookBase
@@ -33,7 +34,15 @@ class ClsEvaluator(HookBase):
                 if isinstance(input_dict[key], torch.Tensor):
                     input_dict[key] = input_dict[key].cuda(non_blocking=True)
             with torch.no_grad():
-                output_dict = self.trainer.model(input_dict)
+                with torch.amp.autocast(
+                    "cuda",
+                    enabled=self.trainer.cfg.enable_amp,
+                    dtype=AMP_DTYPE[self.trainer.cfg.amp_dtype],
+                ):
+                    if self.trainer.cfg.use_ema:
+                        output_dict = self.trainer.ema(input_dict)
+                    else:
+                        output_dict = self.trainer.model(input_dict)
             output = output_dict["cls_logits"]
             loss = output_dict["loss"]
             pred = output.max(1)[1]
@@ -45,9 +54,10 @@ class ClsEvaluator(HookBase):
                 self.trainer.cfg.data.ignore_index,
             )
             if comm.get_world_size() > 1:
-                dist.all_reduce(intersection), dist.all_reduce(union), dist.all_reduce(
-                    target
-                )
+                dist.all_reduce(loss, op=dist.ReduceOp.AVG)
+                dist.all_reduce(intersection)
+                dist.all_reduce(union)
+                dist.all_reduce(target)
             intersection, union, target = (
                 intersection.cpu().numpy(),
                 union.cpu().numpy(),
@@ -135,7 +145,15 @@ class SemSegEvaluator(HookBase):
                 if isinstance(input_dict[key], torch.Tensor):
                     input_dict[key] = input_dict[key].cuda(non_blocking=True)
             with torch.no_grad():
-                output_dict = self.trainer.model(input_dict)
+                with torch.amp.autocast(
+                    "cuda",
+                    enabled=self.trainer.cfg.enable_amp,
+                    dtype=AMP_DTYPE[self.trainer.cfg.amp_dtype],
+                ):
+                    if self.trainer.cfg.use_ema:
+                        output_dict = self.trainer.ema(input_dict)
+                    else:
+                        output_dict = self.trainer.model(input_dict)
             output = output_dict["seg_logits"]
             loss = output_dict["loss"]
             pred = output.max(1)[1]
@@ -151,9 +169,10 @@ class SemSegEvaluator(HookBase):
                 self.trainer.cfg.data.ignore_index,
             )
             if comm.get_world_size() > 1:
-                dist.all_reduce(intersection), dist.all_reduce(union), dist.all_reduce(
-                    target
-                )
+                dist.all_reduce(loss, op=dist.ReduceOp.AVG)
+                dist.all_reduce(intersection)
+                dist.all_reduce(union)
+                dist.all_reduce(target)
             intersection, union, target = (
                 intersection.cpu().numpy(),
                 union.cpu().numpy(),
@@ -558,7 +577,15 @@ class InsSegEvaluator(HookBase):
                 if isinstance(input_dict[key], torch.Tensor):
                     input_dict[key] = input_dict[key].cuda(non_blocking=True)
             with torch.no_grad():
-                output_dict = self.trainer.model(input_dict)
+                with torch.amp.autocast(
+                    "cuda",
+                    enabled=self.trainer.cfg.enable_amp,
+                    dtype=AMP_DTYPE[self.trainer.cfg.amp_dtype],
+                ):
+                    if self.trainer.cfg.use_ema:
+                        output_dict = self.trainer.ema(input_dict)
+                    else:
+                        output_dict = self.trainer.model(input_dict)
 
             loss = output_dict["loss"]
 

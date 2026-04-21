@@ -31,6 +31,7 @@ class BasicBlock(spconv.SparseModule):
         norm_fn=None,
         indice_key=None,
         bias=False,
+        algo=spconv.ConvAlgo.Native,
     ):
         super().__init__()
 
@@ -41,7 +42,7 @@ class BasicBlock(spconv.SparseModule):
         else:
             self.proj = spconv.SparseSequential(
                 spconv.SubMConv3d(
-                    in_channels, embed_channels, kernel_size=1, bias=False
+                    in_channels, embed_channels, kernel_size=1, bias=False, algo=algo
                 ),
                 norm_fn(embed_channels),
             )
@@ -54,6 +55,7 @@ class BasicBlock(spconv.SparseModule):
             padding=1,
             bias=bias,
             indice_key=indice_key,
+            algo=algo,
         )
         self.bn1 = norm_fn(embed_channels)
         self.relu = nn.ReLU()
@@ -65,6 +67,7 @@ class BasicBlock(spconv.SparseModule):
             padding=1,
             bias=bias,
             indice_key=indice_key,
+            algo=algo,
         )
         self.bn2 = norm_fn(embed_channels)
         self.stride = stride
@@ -95,6 +98,7 @@ class SpUNetBase(nn.Module):
         channels=(32, 64, 128, 256, 256, 128, 96, 96),
         layers=(2, 3, 4, 6, 2, 2, 2, 2),
         enc_mode=False,
+        algo=spconv.ConvAlgo.Native,
     ):
         super().__init__()
         assert len(layers) % 2 == 0
@@ -118,6 +122,7 @@ class SpUNetBase(nn.Module):
                 padding=1,
                 bias=False,
                 indice_key="stem",
+                algo=algo,
             ),
             norm_fn(base_channels),
             nn.ReLU(),
@@ -141,6 +146,7 @@ class SpUNetBase(nn.Module):
                         stride=2,
                         bias=False,
                         indice_key=f"spconv{s + 1}",
+                        algo=algo,
                     ),
                     norm_fn(channels[s]),
                     nn.ReLU(),
@@ -159,6 +165,7 @@ class SpUNetBase(nn.Module):
                                     channels[s],
                                     norm_fn=norm_fn,
                                     indice_key=f"subm{s + 1}",
+                                    algo=algo,
                                 ),
                             )
                             for i in range(layers[s])
@@ -176,6 +183,7 @@ class SpUNetBase(nn.Module):
                             kernel_size=2,
                             bias=False,
                             indice_key=f"spconv{s + 1}",
+                            algo=algo,
                         ),
                         norm_fn(dec_channels),
                         nn.ReLU(),
@@ -193,6 +201,7 @@ class SpUNetBase(nn.Module):
                                             dec_channels,
                                             norm_fn=norm_fn,
                                             indice_key=f"subm{s}",
+                                            algo=algo,
                                         ),
                                     )
                                     if i == 0
@@ -203,6 +212,7 @@ class SpUNetBase(nn.Module):
                                             dec_channels,
                                             norm_fn=norm_fn,
                                             indice_key=f"subm{s}",
+                                            algo=algo,
                                         ),
                                     )
                                 )
@@ -220,7 +230,12 @@ class SpUNetBase(nn.Module):
         )
         self.final = (
             spconv.SubMConv3d(
-                final_in_channels, num_classes, kernel_size=1, padding=1, bias=True
+                final_in_channels,
+                num_classes,
+                kernel_size=1,
+                padding=1,
+                bias=True,
+                algo=algo,
             )
             if num_classes > 0
             else spconv.Identity()

@@ -15,7 +15,7 @@ import pandas as pd
 import open3d as o3d
 import multiprocessing as mp
 from collections import OrderedDict
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from itertools import repeat
 from pathlib import Path
 
@@ -252,8 +252,7 @@ if __name__ == "__main__":
     }
 
     print("Processing scenes...")
-    pool = ProcessPoolExecutor(max_workers=config.num_workers)
-    _ = list(
+    with ThreadPoolExecutor(max_workers=config.num_workers) as pool:
         pool.map(
             parse_scene,
             data_list,
@@ -264,8 +263,6 @@ if __name__ == "__main__":
             repeat(class2idx),
             repeat(config.ignore_index),
         )
-    )
-    pool.shutdown()
     # parse_scene(
     #     data_list[0],
     #     split_list[0],

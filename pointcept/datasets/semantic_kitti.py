@@ -61,16 +61,20 @@ class SemanticKITTIDataset(DefaultDataset):
         label_file = data_path.replace("velodyne", "labels").replace(".bin", ".label")
         if os.path.exists(label_file):
             with open(label_file, "rb") as a:
-                segment = np.fromfile(a, dtype=np.int32).reshape(-1)
+                panoptic = np.fromfile(a, dtype=np.int32).reshape(-1)
+                instance = (panoptic >> 16).astype(np.int32) - 1
+                instance[instance >= 0] = panoptic[instance >= 0]
                 segment = np.vectorize(self.learning_map.__getitem__)(
-                    segment & 0xFFFF
+                    panoptic & 0xFFFF
                 ).astype(np.int32)
         else:
             segment = np.zeros(scan.shape[0]).astype(np.int32)
+            instance = np.zeros(scan.shape[0]).astype(np.int32)
         data_dict = dict(
             coord=coord,
             strength=strength,
             segment=segment,
+            instance=instance,
             name=self.get_data_name(idx),
         )
         return data_dict
