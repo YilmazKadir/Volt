@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html data-theme="light">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="description"
+    content="Transformers have become a common foundation across deep learning, yet 3D scene understanding still relies on specialized backbones with strong domain priors. This keeps the field isolated from the broader Transformer ecosystem, limiting the transfer of new advances as well as the benefits of increasingly optimized software and hardware stacks. To bridge this gap, we adapt the vanilla Transformer encoder to 3D scenes with minimal modifications. Given an input 3D scene, we partition it into volumetric patch tokens, process them with full global self-attention, and inject positional information via a 3D extension of rotary positional embeddings. We call the resulting model the Volume Transformer (Volt) and apply it to 3D semantic segmentation. Naively training Volt on standard 3D benchmarks leads to shortcut learning, highlighting the limited scale of current 3D supervision. To overcome this, we introduce a data-efficient training recipe based on strong 3D augmentations, regularization, and distillation from a convolutional teacher, making Volt competitive with state-of-the-art methods. We then scale supervision through joint training on multiple datasets and show that Volt benefits more from increased scale than domain-specific 3D backbones, achieving state-of-the-art results across indoor and outdoor datasets. Finally, when used as a drop-in backbone in a standard 3D instance segmentation pipeline, Volt again sets a new state of the art, highlighting its potential as a simple, scalable, general-purpose backbone for 3D scene understanding." />
+  <meta name="keywords"
+    content="Volt, Transformer, Computer Vision, 3D Scene Understanding, Semantic Segmentation, Instance Segmentation, ScanNet, ScanNet200, ScanNet++, nuScenes, SemanticKITTI, Waymo" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>
+    Volume Transformer: Revisiting Vanilla Transformers for 3D Scene Understanding
+  </title>
+
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet" />
+
+  <link rel="stylesheet" href="./static/css/bulma.min.css" />
+  <link rel="stylesheet" href="./static/css/fontawesome.all.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css" />
+  <link rel="stylesheet" href="./static/css/index.css" />
+  <link rel="icon" href="./static/images/favicon.svg" />
+
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <script defer src="./static/js/fontawesome.all.min.js"></script>
+</head>
+
+<body>
+  <section class="hero">
+    <div class="hero-body">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered">
+          <div class="column has-text-centered">
+            <h1 class="title is-1 publication-title">
+              Volume Transformer: Revisiting Vanilla Transformers for 3D Scene Understanding
+            </h1>
+            <div class="is-size-5 publication-authors">
+              <span class="author-block">
+                <a href="https://github.com/YilmazKadir/">Kadir Yilmaz</a><sup>1,*</sup>
+              </span>
+              <span class="author-block">
+                <a href="https://adriankruse.github.io/">Adrian Kruse</a><sup>1,*</sup>
+              </span>
+              <span class="author-block">
+                <a href="https://www.linkedin.com/in/tristan-hoefer/">Tristan Höfer</a><sup>1</sup>
+              </span>
+              <span class="author-block">
+                <a href="https://daandegeus.com">Daan de Geus</a><sup>2</sup>
+              </span>
+              <span class="author-block">
+                <a href="https://scholar.google.com/citations?user=ZcULDB0AAAAJ">Bastian Leibe</a><sup>1</sup>
+              </span>
+            </div>
+
+            <div class="is-size-5 publication-authors">
+              <span class="author-block"><sup>1</sup>RWTH Aachen University</span>
+              <span class="author-block"><sup>2</sup>Eindhoven University of Technology</span>
+            </div>
+
+            <div class="is-size-6 publication-authors" style="margin-top: 0.75rem;">
+              <span class="author-block"><sup>*</sup> Equal contribution</span>
+            </div>
+
+            <div class="column has-text-centered">
+              <div class="publication-links">
+                <!-- arXiv PDF. -->
+                <span class="link-block">
+                  <a href="https://arxiv.org/pdf/" class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="fas fa-file-pdf"></i>
+                    </span>
+                    <span>Paper</span>
+                  </a>
+                </span>
+
+                <!-- arXiv abstract. -->
+                <span class="link-block">
+                  <a href="https://arxiv.org/abs/" class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="ai ai-arxiv"></i>
+                    </span>
+                    <span>arXiv</span>
+                  </a>
+                </span>
+
+                <!-- GitHub. -->
+                <span class="link-block">
+                  <a href="https://github.com/YilmazKadir/Volt"
+                    class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="fab fa-github"></i>
+                    </span>
+                    <span>Code</span>
+                  </a>
+                </span>
+
+              </div>
+            </div>
+
+            <figure class="image-container has-text-centered" style="max-width: 100%; margin: 0 auto;">
+              <img src="static/img/main_figure.webp" alt="Volt architecture" style="max-width: 100%; height: auto" />
+              <figcaption style="font-size: 1em; margin-top: 10px; text-align: left">
+                <strong>Volt architecture.</strong>
+                The input 3D scene is partitioned into non-overlapping volumetric patches, and each patch is embedded into a token with a linear tokenizer.
+                The resulting token sequence is processed by a Transformer encoder with global attention.
+                The latent tokens are then upsampled back to the voxel resolution with a single transposed convolution and mapped to semantic predictions by a linear classification head.
+              </figcaption>
+            </figure>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column is-four-fifths">
+          <h2 class="title is-3 has-text-centered">Abstract</h2>
+          <div class="content has-text-justified">
+            <p>
+              Transformers have become a common foundation across deep learning, yet 3D scene understanding still relies on specialized backbones with strong domain priors.
+              This keeps the field isolated from the broader Transformer ecosystem, limiting the transfer of new advances as well as the benefits of increasingly optimized software and hardware stacks.
+              To bridge this gap, we adapt the vanilla Transformer encoder to 3D scenes with minimal modifications.
+              Given an input 3D scene, we partition it into volumetric patch tokens, process them with full global self-attention, and inject positional information via a 3D extension of rotary positional embeddings.
+              We call the resulting model the Volume Transformer (Volt) and apply it to 3D semantic segmentation.
+              Naively training Volt on standard 3D benchmarks leads to shortcut learning, highlighting the limited scale of current 3D supervision.
+              To overcome this, we introduce a data-efficient training recipe based on strong 3D augmentations, regularization, and distillation from a convolutional teacher, making Volt competitive with state-of-the-art methods.
+              We then scale supervision through joint training on multiple datasets and show that Volt benefits more from increased scale than domain-specific 3D backbones, achieving state-of-the-art results across indoor and outdoor datasets.
+              Finally, when used as a drop-in backbone in a standard 3D instance segmentation pipeline, Volt again sets a new state of the art, highlighting its potential as a simple, scalable, general-purpose backbone for 3D scene understanding.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <h2 class="title is-4">Training Volt</h2>
+        </div>
+      </div>
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <figure style="max-width: 100%; margin: 0 auto">
+            <img src="static/img/training.webp" alt="Training Volt table" style="width: 100%; height: auto" />
+            <figcaption style="font-size: 1.0em; margin-top: 10px; text-align: left">
+              Full global self-attention gives Transformers the capacity to model long-range interactions across an entire 3D scene, but it also makes them data-hungry.
+              In 3D, supervision is comparatively scarce, and we find that naively training Volt on standard 3D benchmarks leads to pronounced overfitting.
+              To address this, we propose a training recipe inspired by data-efficient training strategies in 2D vision, combining strong data augmentation, model regularization, and distillation to enable effective training of Volt from scratch.
+              Finally, we scale supervision via multi-dataset training to study the scaling behavior of Volt.
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <h2 class="title is-4">Scaling Behaviour of 3D backbones</h2>
+        </div>
+      </div>
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <figure style="max-width: 100%; margin: 0 auto">
+            <img src="static/img/scaling.webp" alt="Scaling Volt table" style="width: 100%; height: auto" />
+            <figcaption style="font-size: 1.0em; margin-top: 10px; text-align: left">
+              Under naive training, Volt performs poorly in the low-data regime but improves rapidly as the training set grows, revealing substantial headroom with scale.
+              Applying data-efficient training recipe significantly improves performance, making Volt-S consistently better than the 5 times larger PTv3-B model across all data scales. 
+              At the largest supervision scale, improvements for Volt-S begin to saturate, suggesting performance becomes capacity-limited with 23.7M parameters.
+              Scaling the backbone to Volt-B alleviates this saturation: Volt-B continues to benefit from additional supervision and opens a clear gap under multi-dataset training.
+              Overall, these results suggest that, as supervision increases, hand-crafted architectural priors become less critical and may even introduce unnecessary overhead, while Volt can instead learn domain-specific 3D patterns directly from data.
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="section">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <h2 class="title is-4">Volt Quantitative Results</h2>
+        </div>
+      </div>
+
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <figure style="max-width: 100%; margin: 0 auto">
+            <img src="static/img/table1.webp" alt="Table 1" style="width: 100%; height: auto" />
+          </figure>
+        </div>
+      </div>
+
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <figure style="max-width: 100%; margin: 0 auto">
+            <img src="static/img/table2.webp" alt="Table 2" style="width: 100%; height: auto" />
+          </figure>
+        </div>
+      </div>
+
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <figure style="max-width: 100%; margin: 0 auto">
+            <img src="static/img/table3.webp" alt="Table 3" style="width: 100%; height: auto" />
+          </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="BibTeX">
+    <div class="container is-max-desktop content">
+      <h2 class="title">BibTeX</h2>
+      <div style="position: relative">
+        <pre><code id="bibtex">@article{yilmaz2026Volt,
+  title     = {{Volume Transformer: Revisiting Vanilla Transformers for 3D Scene Understanding}},
+  author    = {Yilmaz, Kadir and Kruse, Adrian and Höfer, Tristan and de Geus, Daan and Leibe, Bastian},
+  journal   = {arXiv preprint arXiv:},
+  year      = {2026}
+}</code></pre>
+        <button onclick="copyToClipboard()" style="
+              position: absolute;
+              top: 10px;
+              right: 10px;
+              background-color: #f3f4f6;
+              border: 1px solid #d1d5db;
+              border-radius: 5px;
+              padding: 5px 10px;
+              cursor: pointer;
+            ">
+          <span style="display: flex; align-items: center; gap: 5px">
+            <i class="far fa-copy has-text-grey" id="bibtex-copy-icon"></i>
+            Copy
+          </span>
+        </button>
+      </div>
+      <script>
+        function copyToClipboard() {
+          const codeBlock = document.getElementById("bibtex").innerText;
+          navigator.clipboard.writeText(codeBlock).then(
+            () => {
+              const icon = document.getElementById("bibtex-copy-icon");
+              icon.classList.remove("far", "fa-copy", "has-text-grey");
+              icon.classList.add("fas", "fa-check", "has-text-success");
+            },
+            (err) => alert("Failed to copy: " + err)
+          );
+        }
+      </script>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="columns is-centered">
+        <div class="column is-8">
+          <div class="content has-text-centered">
+            <p>
+              This website is licensed under
+              <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>. It is based on
+              the
+              <a href="https://nerfies.github.io/">Nerfies website</a>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </footer>
+</body>
+
+</html>
