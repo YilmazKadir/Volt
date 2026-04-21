@@ -38,8 +38,10 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 Then set up the environment with:
 ```bash
-# make sure to load CUDA 12.6 beforehand
+# Make sure to load CUDA 12.6 beforehand
+# This will automatically create a virtual environment (.venv) and install dependencies from pyproject.toml
 uv sync
+source .venv/bin/activate
 ```
 
 ## Data Preprocessing
@@ -49,10 +51,9 @@ Follow the dataset setup instructions in the [Pointcept README](https://github.c
 Preprocessing for indoor datasets is identical to Pointcept.
 
 ### Nuscenes
-For **nuScenes**, run the preprocessing script below to additionally write panoptic labels to the `.pkl` files.
+For **nuScenes**, run the preprocessing script below. Unlike Pointcept preprocessing, we additionally write panoptic labels to the `.pkl` files.
 ```bash
-pip install nuscenes-devkit pyquaternion
-python pointcept/datasets/preprocessing/nuscenes/preprocess_nuscenes_info.py --dataset_root ${NUSCENES_DIR} --output_root ${PROCESSED_NUSCENES_DIR}
+uv run --no-project --python 3.12 --with nuscenes-devkit python pointcept/datasets/preprocessing/nuscenes/preprocess_nuscenes_info.py --dataset_root ${NUSCENES_DIR} --output_root ${PROCESSED_NUSCENES_DIR}
 ```
 
 ### SemanticKITTI
@@ -63,10 +64,10 @@ python pointcept/datasets/preprocessing/semantic_kitti/build_instance_db_h5.py -
 ```
 
 ### Waymo
-For **Waymo**, run the preprocessing script below. Waymo provides multiple LiDAR sensors, but our preprocessing keeps only points from the TOP LiDAR sensor, since only those points have semantic labels.
+For **Waymo**, run the preprocessing script below. Waymo provides multiple LiDAR sensors. Unlike Pointcept preprocessing, we use only the points from the TOP LiDAR sensor, since only those points have semantic labels.
 
 ```bash
-python pointcept/datasets/preprocessing/waymo/preprocess_waymo.py --dataset_root ${WAYMO_DIR} --output_root ${PROCESSED_WAYMO_DIR} --splits training validation --num_workers ${NUM_WORKERS}
+uv run --no-project --python 3.10 --with waymo-open-dataset-tf-2-11-0 python pointcept/datasets/preprocessing/waymo/preprocess_waymo.py --dataset_root ${WAYMO_DIR} --output_root ${PROCESSED_WAYMO_DIR} --splits training validation --num_workers ${NUM_WORKERS}
 ```
 
 ## Train
