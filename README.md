@@ -1,7 +1,7 @@
 <h1 align="center">Volume Transformer: Revisiting Vanilla Transformers for 3D Scene Understanding</h1>
 
 <p align="center">
-  <a href="https://arxiv.org/abs/">Paper</a>
+  <a href="https://arxiv.org/abs/2604.19609">Paper</a>
   ·
   <a href="http://vision.rwth-aachen.de/Volt">Project Page</a>
   ·
@@ -26,8 +26,8 @@
 
 ## Setup
 
-This repository is built on top of [Pointcept](https://github.com/Pointcept/Pointcept/blob/04a0232b70f5c7091ffdc6bfe7a476e3eb7daff2). It also incorporates components from [SGIFormer](https://github.com/RayYoh/SGIFormer/blob/4c05d57bbbd676b6a2398b03deac916e603a9dd7) for instance segmentation.
-
+This repository is built on top of [Pointcept](https://github.com/Pointcept/Pointcept/blob/04a0232b70f5c7091ffdc6bfe7a476e3eb7daff2) and incorporates components from [SGIFormer](https://github.com/RayYoh/SGIFormer/blob/4c05d57bbbd676b6a2398b03deac916e603a9dd7) for instance segmentation. For integrating image features with 3D backbones, please refer to our [DITR](https://github.com/VisualComputingInstitute/ditr) codebase.
+ codebase.
 ### Dependencies
 We recommend using [`uv`](https://docs.astral.sh/uv/#highlights), a fast Python package and environment manager, to install the environment.
 
@@ -105,7 +105,7 @@ If you use our work in your research, please use the following BibTeX entry.
 @article{yilmaz2026volt,
   title     = {{Volume Transformer: Revisiting Vanilla Transformers for 3D Scene Understanding}},
   author    = {Yilmaz, Kadir and Kruse, Adrian and Höfer, Tristan and de Geus, Daan and Leibe, Bastian},
-  journal   = {arXiv preprint arXiv:},
+  journal   = {arXiv preprint arXiv:2604.19609},
   year      = {2026}
 }
 ```
