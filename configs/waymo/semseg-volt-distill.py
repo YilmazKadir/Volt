@@ -38,7 +38,7 @@ model = dict(
             layers=(2, 3, 4, 6, 2, 2, 2, 2),
         ),
     ),
-    teacher_weights="weights/waymo_unet_teacher.pth",
+    teacher_weights="weights/teacher_weights/waymo_unet_teacher.pth",
     criteria=[
         dict(
             type="CrossEntropyLoss",

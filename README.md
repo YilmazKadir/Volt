@@ -27,7 +27,7 @@
 ## Setup
 
 This repository is built on top of [Pointcept](https://github.com/Pointcept/Pointcept/blob/04a0232b70f5c7091ffdc6bfe7a476e3eb7daff2) and incorporates components from [SGIFormer](https://github.com/RayYoh/SGIFormer/blob/4c05d57bbbd676b6a2398b03deac916e603a9dd7) for instance segmentation. For integrating image features with 3D backbones, please refer to our [DITR](https://github.com/VisualComputingInstitute/ditr) codebase.
- codebase.
+
 ### Dependencies
 We recommend using [`uv`](https://docs.astral.sh/uv/#highlights), a fast Python package and environment manager, to install the environment.
 
@@ -75,7 +75,7 @@ uv run --no-project --python 3.10 --with waymo-open-dataset-tf-2-11-0 python poi
 Download UNet teacher weights from [HuggingFace](https://huggingface.co/KadirYilmaz/Volt/tree/main)
 
 ```bash
-hf download KadirYilmaz/Volt --include "*.pth" --local-dir weights/
+hf download KadirYilmaz/Volt --include "teacher_weights/*.pth" --local-dir weights/
 ```
 
 ```bash
