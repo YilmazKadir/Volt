@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/29ead135-6431-4441-b618-95ff0dd3b15f" alt="main_figure" width="900" />
+  <img src="https://omnomnom.vision.rwth-aachen.de/data/Volt/Volt.jpg" alt="main_figure" width="900" />
 </p>
 
 <p align="center">
