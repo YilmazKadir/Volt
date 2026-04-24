@@ -44,9 +44,7 @@ class MultiDatasetDataloader:
         self.dataloaders = []
         for dataset_id, dataset in enumerate(self.datasets):
             if comm.get_world_size() > 1:
-                sampler = torch.utils.data.distributed.DistributedSampler(
-                    dataset, seed=seed
-                )
+                sampler = torch.utils.data.distributed.DistributedSampler(dataset)
             else:
                 sampler = None
 

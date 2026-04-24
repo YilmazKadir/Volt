@@ -310,9 +310,7 @@ class Trainer(TrainerBase):
         train_data = build_dataset(self.cfg.data.train)
 
         if comm.get_world_size() > 1:
-            train_sampler = torch.utils.data.distributed.DistributedSampler(
-                train_data, seed=self.cfg.seed
-            )
+            train_sampler = torch.utils.data.distributed.DistributedSampler(train_data)
         else:
             train_sampler = None
 
