@@ -9,7 +9,6 @@ weights/*
 !weights/.gitkeep
 data/*
 !data/.gitkeep
-*log*
 outputs/
 .vscode
 .idea
