@@ -137,6 +137,10 @@ class OneCycleLR(lr_scheduler.OneCycleLR):
         three_phase=False,
         last_epoch=-1,
     ):
+        if isinstance(max_lr, (list, tuple)) and len(max_lr) != len(
+            optimizer.param_groups
+        ):
+            max_lr = [group["lr"] for group in optimizer.param_groups]
         super().__init__(
             optimizer=optimizer,
             max_lr=max_lr,
