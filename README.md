@@ -19,7 +19,12 @@
 <p align="center">
   Volt partitions the input 3D scene into non-overlapping volumetric patches and embeds each patch into a token with a linear tokenizer. The resulting token sequence is processed by a Transformer encoder with global attention. The latent tokens are then upsampled back to the voxel resolution with a single transposed convolution and mapped to semantic predictions by a linear classification head.
 </p>
-    
+
+<p align="center">
+  The core Volt model implementation can be found in
+  <a href="pointcept/models/volt/volt_base.py"><code>pointcept/models/volt/volt_base.py</code></a>.
+</p>
+
 ## 📢 News
 
 - 2026-04-22: Code release.
@@ -95,7 +100,18 @@ sh scripts/train.sh -g 4 -d waymo -c semseg-volt-distill -n semseg-volt-distill
 
 ## Model Zoo
 
-Coming Soon.
+We provide the experiment directories, including configs, logs, and checkpoints. The experiments can also be seen from [Hugging Face](https://huggingface.co/KadirYilmaz/Volt/tree/main).
+
+### Semantic Segmentation: Single-Dataset Training
+
+| Model | Dataset | Val mIoU | Exp. Dir |
+| :--- | :--- | :---: | :---: |
+| Volt-S | ScanNet | 76.3 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/scannet) |
+| Volt-S | ScanNet200 | 36.1 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/scannet200) |
+| Volt-S | ScanNet++ | 50.2 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/scannetpp) |
+| Volt-S | nuScenes | 81.1 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/nuscenes) |
+| Volt-S | SemanticKITTI | 70.3 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/semantic_kitti) |
+| Volt-S | Waymo | 71.2 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/waymo) |
 
 ## Citation
 
