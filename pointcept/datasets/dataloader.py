@@ -108,3 +108,118 @@ class MultiDatasetDataloader:
             + seed
         )
         set_seed(worker_seed)
+
+
+class RatioShuffleSampler(torch.utils.data.Sampler):
+    """
+    Ratio-based shuffled sampler for ConcatDataset.
+
+    Assumptions:
+        - All sub-dataset loops are 1.
+        - Ratios are passed explicitly.
+        - Batches are globally shuffled, so they are not homogeneous.
+        - Works with DDP by sharding indices across ranks.
+    """
+
+    def __init__(
+        self,
+        concat_dataset: ConcatDataset,
+        ratios: list,
+        batch_size_per_gpu: int,
+        seed=0,
+    ):
+        self.ratios = ratios
+        self.seed = seed
+        self.epoch = 0
+
+        self.rank = comm.get_rank()
+        self.world_size = comm.get_world_size()
+
+        self.dataset_lengths = [len(dataset) for dataset in concat_dataset.datasets]
+
+        assert len(self.ratios) == len(concat_dataset.datasets)
+        assert all(dataset.loop == 1 for dataset in concat_dataset.datasets)
+        assert len(concat_dataset.data_list) == sum(self.dataset_lengths)
+
+        # Cumulative offsets into ConcatDataset index space.
+        # Example: lengths [10, 25, 7] -> offsets [0, 10, 35]
+        self.offsets = [0]
+        for length in self.dataset_lengths[:-1]:
+            self.offsets.append(self.offsets[-1] + length)
+
+        # Main dataset determines epoch length.
+        self.main_count = self.dataset_lengths[0] * concat_dataset.loop
+
+        self.num_samples_per_dataset = [
+            int(round(self.main_count * ratio / self.ratios[0]))
+            for ratio in self.ratios
+        ]
+
+        self.global_num_samples = sum(self.num_samples_per_dataset)
+
+        # Drop incomplete global batches.
+        self.global_batch_size = self.world_size * batch_size_per_gpu
+        self.total_size = (
+            self.global_num_samples // self.global_batch_size
+        ) * self.global_batch_size
+
+        # Per-rank number of samples. This is divisible by batch_size_per_gpu.
+        self.num_samples = self.total_size // self.world_size
+
+    def set_epoch(self, epoch):
+        self.epoch = epoch
+
+    def _sample_dataset(self, dataset_idx, count, generator):
+        """
+        Sample global ConcatDataset indices from one sub-dataset.
+
+        Uses random permutations without replacement. If count is larger than
+        the dataset size, it starts a new random permutation.
+        """
+        length = self.dataset_lengths[dataset_idx]
+        offset = self.offsets[dataset_idx]
+
+        sampled = []
+
+        while len(sampled) < count:
+            perm = torch.randperm(length, generator=generator).tolist()
+            remaining = count - len(sampled)
+            take = min(remaining, length)
+
+            sampled.extend(offset + idx for idx in perm[:take])
+
+        return sampled
+
+    def __iter__(self):
+        generator = torch.Generator()
+        generator.manual_seed(self.seed + self.epoch)
+
+        indices = []
+
+        # Ratio-based sampling from each dataset.
+        for dataset_idx, count in enumerate(self.num_samples_per_dataset):
+            indices.extend(
+                self._sample_dataset(
+                    dataset_idx=dataset_idx,
+                    count=count,
+                    generator=generator,
+                )
+            )
+
+        # Global shuffle across all datasets.
+        # This is what makes batches heterogeneous.
+        order = torch.randperm(len(indices), generator=generator).tolist()
+        indices = [indices[i] for i in order]
+
+        # Drop incomplete global batch.
+        indices = indices[: self.total_size]
+
+        # DDP sharding.
+        indices = indices[self.rank : self.total_size : self.world_size]
+
+        assert len(indices) == self.num_samples
+
+        return iter(indices)
+
+    def __len__(self):
+        return self.num_samples

@@ -72,6 +72,7 @@ def point_collate_fn(batch, mix_prob=0):
         batch[0], Mapping
     )  # currently, only support input_dict, rather than input_list
     batch = collate_fn(batch)
+    unmixed_offset = batch["offset"].clone() if "offset" in batch else None
     if random.random() < mix_prob:
         if "instance" in batch.keys():
             offset = batch["offset"]
@@ -133,6 +134,8 @@ def point_collate_fn(batch, mix_prob=0):
                     start:N, -v:
                 ]
             batch[correspondence_asset] = batch_correspondence_mix
+    if unmixed_offset is not None:
+        batch["unmixed_offset"] = unmixed_offset
     return batch
 
 

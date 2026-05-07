@@ -25,7 +25,12 @@ from tensorboardX import SummaryWriter
 from .defaults import create_ddp_model, worker_init_fn, AMP_DTYPE
 from .hooks import HookBase, build_hooks
 import pointcept.utils.comm as comm
-from pointcept.datasets import build_dataset, point_collate_fn, collate_fn
+from pointcept.datasets import (
+    build_dataset,
+    point_collate_fn,
+    collate_fn,
+    RatioShuffleSampler,
+)
 from pointcept.models import build_model
 from pointcept.utils.logger import get_root_logger
 from pointcept.utils.optimizer import build_optimizer
@@ -162,7 +167,7 @@ class Trainer(TrainerBase):
             self.logger.info(">>>>>>>>>>>>>>>> Start Training >>>>>>>>>>>>>>>>")
             for self.epoch in range(self.start_epoch, self.max_epoch):
                 # => before epoch
-                if comm.get_world_size() > 1:
+                if hasattr(self.train_loader.sampler, "set_epoch"):
                     self.train_loader.sampler.set_epoch(self.epoch)
                 self.model.train()
                 self.data_iterator = enumerate(self.train_loader)
@@ -309,8 +314,17 @@ class Trainer(TrainerBase):
     def build_train_loader(self):
         train_data = build_dataset(self.cfg.data.train)
 
-        if comm.get_world_size() > 1:
-            train_sampler = torch.utils.data.distributed.DistributedSampler(train_data)
+        if self.cfg.dataset_ratios is not None:
+            train_sampler = RatioShuffleSampler(
+                train_data,
+                ratios=self.cfg.dataset_ratios,
+                batch_size_per_gpu=self.cfg.batch_size_per_gpu,
+                seed=self.cfg.seed,
+            )
+        elif comm.get_world_size() > 1:
+            train_sampler = torch.utils.data.distributed.DistributedSampler(
+                train_data, seed=self.cfg.seed
+            )
         else:
             train_sampler = None
 

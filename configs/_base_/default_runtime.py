@@ -15,6 +15,7 @@ eval_epoch = 100  # sche total eval & checkpoint epoch
 clip_grad = None  # disable with None, enable with a float
 use_ema = False
 ema_decay = 0.999
+dataset_ratios = None
 
 sync_bn = False
 enable_amp = False

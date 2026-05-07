@@ -22,4 +22,4 @@ from .modelnet import ModelNetDataset
 from .shapenet_part import ShapeNetPartDataset
 
 # dataloader
-from .dataloader import MultiDatasetDataloader
+from .dataloader import MultiDatasetDataloader, RatioShuffleSampler
