@@ -358,7 +358,7 @@ class SemSegTester(TesterBase):
                     mIoU, mAcc, allAcc
                 )
             )
-            if self.cfg.enable_wandb:
+            if self.cfg.enable_wandb and wandb.run is not None:
                 wandb.log(
                     {
                         "test/mIoU": mIoU,
