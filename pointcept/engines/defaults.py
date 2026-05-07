@@ -128,8 +128,6 @@ def default_config_parser(file_path, options):
     cfg.data.train.loop = cfg.epoch // cfg.eval_epoch
 
     os.makedirs(os.path.join(cfg.save_path, "model"), exist_ok=True)
-    if not cfg.resume:
-        cfg.dump(os.path.join(cfg.save_path, "config.py"))
     return cfg
 
 
@@ -151,6 +149,12 @@ def default_setup(cfg):
     # update data loop
     assert cfg.epoch % cfg.eval_epoch == 0
     # settle random seed
+    if comm.get_world_size() > 1:
+        cfg.seed = comm.all_gather(cfg.seed)[0]
+    if comm.is_main_process() and not cfg.resume:
+        cfg.dump(os.path.join(cfg.save_path, "config.py"))
+    comm.synchronize()
+
     rank = comm.get_rank()
     seed = None if cfg.seed is None else cfg.seed + rank * cfg.num_worker_per_gpu
     set_seed(seed)
