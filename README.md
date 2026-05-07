@@ -82,6 +82,7 @@ Download UNet teacher weights from [HuggingFace](https://huggingface.co/KadirYil
 ```bash
 hf download KadirYilmaz/Volt --include "teacher_weights/*.pth" --local-dir weights/
 ```
+Then, run the training script with the `semseg-volt-distill` config for each dataset.
 
 ```bash
 ### ScanNet
@@ -98,6 +99,20 @@ sh scripts/train.sh -g 4 -d semantic_kitti -c semseg-volt-distill -n semseg-volt
 sh scripts/train.sh -g 4 -d waymo -c semseg-volt-distill -n semseg-volt-distill
 ```
 
+For joint training, use the `semseg-volt-joint-small` config instead.
+```bash
+### ScanNet
+sh scripts/train.sh -g 4 -d scannet -c semseg-volt-joint-small -n semseg-volt-joint-small
+### ScanNet200
+sh scripts/train.sh -g 4 -d scannet200 -c semseg-volt-joint-small -n semseg-volt-joint-small
+### NuScenes
+sh scripts/train.sh -g 4 -d nuscenes -c semseg-volt-joint-small -n semseg-volt-joint-small
+### SemanticKITTI
+sh scripts/train.sh -g 4 -d semantic_kitti -c semseg-volt-joint-small -n semseg-volt-joint-small
+### Waymo
+sh scripts/train.sh -g 4 -d waymo -c semseg-volt-joint-small -n semseg-volt-joint-small
+```
+
 ## Model Zoo
 
 We provide the experiment directories, including configs, logs, and checkpoints. The experiments can also be seen from [Hugging Face](https://huggingface.co/KadirYilmaz/Volt/tree/main).
@@ -112,6 +127,16 @@ We provide the experiment directories, including configs, logs, and checkpoints.
 | Volt-S | nuScenes | 81.1 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/nuscenes) |
 | Volt-S | SemanticKITTI | 70.3 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/semantic_kitti) |
 | Volt-S | Waymo | 71.2 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/waymo) |
+
+### Semantic Segmentation: Joint Training
+
+| Model | Dataset | Val mIoU | Exp. Dir |
+| :--- | :--- | :---: | :---: |
+| Volt-S | ScanNet | 80.2 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_small/scannet) |
+| Volt-S | ScanNet200 | 38.5 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_small/scannet200) |
+| Volt-S | nuScenes | 81.8 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_small/nuscenes) |
+| Volt-S | SemanticKITTI | 72.8 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_small/semantic_kitti) |
+| Volt-S | Waymo | 72.5 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_small/waymo) |
 
 ## Citation
 
