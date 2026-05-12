@@ -74,18 +74,78 @@ def point_collate_fn(batch, mix_prob=0):
     batch = collate_fn(batch)
     unmixed_offset = batch["offset"].clone() if "offset" in batch else None
     if random.random() < mix_prob:
-        if "instance" in batch.keys():
-            offset = batch["offset"]
-            start = 0
-            num_instance = 0
-            for i in range(len(offset)):
-                if i % 2 == 0:
-                    num_instance = max(batch["instance"][start : offset[i]])
-                if i % 2 != 0:
-                    mask = batch["instance"][start : offset[i]] != -1
-                    batch["instance"][start : offset[i]] += num_instance * mask
-                start = offset[i]
-        offset_assets = [asset for asset in batch.keys() if "offset" in asset]
+        instance_ignore_index = -1
+        vx_offset = batch.get("offset", None)
+        pt_offset = batch.get("origin_offset", None)
+        if vx_offset is None:
+            return batch
+        for i in range(0, len(vx_offset) - 1, 2):
+            vx0s = 0 if i == 0 else int(vx_offset[i - 1].item())
+            vx0e = int(vx_offset[i].item())
+            vx1s = int(vx_offset[i + 1 - 1].item())
+            vx1e = int(vx_offset[i + 1].item())
+            vx_shift = vx0e - vx0s
+
+            if "instance" in batch:
+                inst0 = batch["instance"][vx0s:vx0e]
+                valid0 = inst0 != instance_ignore_index
+                inst_shift = int(inst0[valid0].max().item()) + 1 if valid0.any() else 0
+                if inst_shift:
+                    inst1 = batch["instance"][vx1s:vx1e]
+                    valid1 = inst1 != instance_ignore_index
+                    inst1[valid1] += inst_shift
+
+            if pt_offset is not None:
+                pt0s = 0 if i == 0 else int(pt_offset[i - 1].item())
+                pt0e = int(pt_offset[i].item())
+                pt1s = int(pt_offset[i + 1 - 1].item())
+                pt1e = int(pt_offset[i + 1].item())
+
+                if "origin_instance" in batch:
+                    oinst0 = batch["origin_instance"][pt0s:pt0e]
+                    valid0 = oinst0 != instance_ignore_index
+                    oinst_shift = (
+                        int(oinst0[valid0].max().item()) + 1 if valid0.any() else 0
+                    )
+                    if oinst_shift:
+                        oinst1 = batch["origin_instance"][pt1s:pt1e]
+                        valid1 = oinst1 != instance_ignore_index
+                        oinst1[valid1] += oinst_shift
+
+                if "inverse" in batch and vx_shift:
+                    batch["inverse"][pt1s:pt1e] += vx_shift
+
+                if "superpoint" in batch:
+                    sp0 = batch["superpoint"][pt0s:pt0e]
+                    valid0 = sp0 >= 0
+                    sp_shift = int(sp0[valid0].max().item()) + 1 if valid0.any() else 0
+                    if sp_shift:
+                        sp1 = batch["superpoint"][pt1s:pt1e]
+                        valid1 = sp1 >= 0
+                        sp1[valid1] += sp_shift
+
+        if vx_offset.numel() > 1:
+            batch["offset"] = torch.cat(
+                [vx_offset[1:-1:2], vx_offset[-1].unsqueeze(0)], dim=0
+            )
+        if pt_offset is not None:
+            batch["unmixed_origin_offset"] = pt_offset.clone()
+            if pt_offset.numel() > 1:
+                batch["origin_offset"] = torch.cat(
+                    [pt_offset[1:-1:2], pt_offset[-1].unsqueeze(0)], dim=0
+                )
+        offset_assets = [
+            asset
+            for asset in batch.keys()
+            if "offset" in asset
+            and asset
+            not in (
+                "offset",
+                "origin_offset",
+                "unmixed_offset",
+                "unmixed_origin_offset",
+            )
+        ]
         for offset_asset in offset_assets:
             batch[offset_asset] = torch.cat(
                 [batch[offset_asset][1:-1:2], batch[offset_asset][-1].unsqueeze(0)],

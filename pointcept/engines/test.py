@@ -976,27 +976,23 @@ class InsSegTester(TesterBase):
                 if isinstance(data_dict[key], torch.Tensor):
                     data_dict[key] = data_dict[key].cuda(non_blocking=True)
             with torch.no_grad():
-                with torch.amp.autocast(
-                    "cuda",
-                    enabled=self.cfg.enable_amp,
-                    dtype=AMP_DTYPE[self.cfg.amp_dtype],
-                ):
-                    output_dict = self.model(data_dict)
+                output_dict = self.model(data_dict)
                 segment = data_dict["segment"]
                 instance = data_dict["instance"]
 
                 if "origin_coord" in data_dict.keys():
-                    reverse, _ = pointops.knn_query(
-                        1,
-                        data_dict["coord"].float(),
-                        data_dict["offset"].int(),
-                        data_dict["origin_coord"].float(),
-                        data_dict["origin_offset"].int(),
-                    )
-                    reverse = reverse.cpu().flatten().long()
-                    output_dict["pred_masks"] = output_dict["pred_masks"][:, reverse]
                     segment = data_dict["origin_segment"]
                     instance = data_dict["origin_instance"]
+                    if output_dict["pred_masks"].shape[1] != segment.shape[0]:
+                        reverse, _ = pointops.knn_query(
+                            1,
+                            data_dict["coord"].float(),
+                            data_dict["offset"].int(),
+                            data_dict["origin_coord"].float(),
+                            data_dict["origin_offset"].int(),
+                        )
+                        reverse = reverse.cpu().flatten().long()
+                        output_dict["pred_masks"] = output_dict["pred_masks"][:, reverse]
 
                 gt_instances, pred_instance = self.associate_instances(
                     output_dict, segment, instance

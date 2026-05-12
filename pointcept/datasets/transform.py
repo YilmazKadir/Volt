@@ -186,6 +186,14 @@ class CenterShift(object):
 
 
 @TRANSFORMS.register_module()
+class MeanShift(object):
+    def __call__(self, data_dict):
+        if "coord" in data_dict.keys():
+            data_dict["coord"] -= data_dict["coord"].mean(axis=0)
+        return data_dict
+
+
+@TRANSFORMS.register_module()
 class RandomShift(object):
     def __init__(self, shift=((-0.2, 0.2), (-0.2, 0.2), (0, 0))):
         self.shift = shift
