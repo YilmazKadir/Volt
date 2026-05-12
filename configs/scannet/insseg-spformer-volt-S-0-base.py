@@ -8,6 +8,8 @@ _base_ = ["../_base_/default_runtime.py"]
 epoch = 75
 eval_epoch = 75
 
+weight = "weights/volt-small-scannet.pth"
+
 batch_size = 8
 num_worker = 16
 mix_prob = 0.8
@@ -25,7 +27,6 @@ segment_ignore_index = (-1, 0, 1)
 semantic_num_classes = 18
 num_channels = 128
 
-wandb_project = "SPF-ScanNet200"
 enable_wandb = True
 
 model = dict(
@@ -248,6 +249,7 @@ data = dict(
         test_mode=False,
     ),
 )
+data["test"] = data["val"]
 
 hooks = [
     dict(
