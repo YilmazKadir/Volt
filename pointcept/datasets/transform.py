@@ -1300,7 +1300,7 @@ class InstanceParser(object):
         coord = data_dict["coord"]
         segment = data_dict["segment"]
         instance = data_dict["instance"]
-        mask = ~np.in1d(segment, self.segment_ignore_index)
+        mask = ~np.isin(segment, self.segment_ignore_index)
         # mapping ignored instance to ignore index
         instance[~mask] = self.instance_ignore_index
         # reorder left instance

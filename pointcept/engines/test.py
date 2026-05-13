@@ -1090,7 +1090,7 @@ class InsSegTester(TesterBase):
     def associate_instances(self, pred, segment, instance):
         segment = segment.cpu().numpy()
         instance = instance.cpu().numpy()
-        void_mask = np.in1d(segment, self.segment_ignore_index)
+        void_mask = np.isin(segment, self.segment_ignore_index)
 
         assert (
             pred["pred_classes"].shape[0]
