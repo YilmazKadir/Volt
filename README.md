@@ -119,10 +119,8 @@ Download the pretrained jointly trained Volt-S backbone weights from [HuggingFac
 
 ```bash
 mkdir -p weights
-### ScanNet
-curl -L -o weights/volt-small-scannet.pth    https://huggingface.co/KadirYilmaz/Volt/resolve/main/Volt_experiments/joint_training_small/scannet/model/model_best.pth
-### ScanNet200
-curl -L -o weights/volt-small-scannet200.pth https://huggingface.co/KadirYilmaz/Volt/resolve/main/Volt_experiments/joint_training_small/scannet200/model/model_best.pth
+curl -L -o weights/volt-small-scannet.pth    https://huggingface.co/KadirYilmaz/Volt/resolve/main/Volt_experiments/joint_training_small/scannet/model/model_last.pth
+curl -L -o weights/volt-small-scannet200.pth https://huggingface.co/KadirYilmaz/Volt/resolve/main/Volt_experiments/joint_training_small/scannet200/model/model_last.pth
 ```
 Alternatively you can train them yourself using the corresponding configs above.
 
