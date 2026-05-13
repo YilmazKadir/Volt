@@ -16,7 +16,9 @@ def process_label(
     segment_ignore_index: tuple[int, ...] = (-1, 0, 2),
     semantic_ignore_index: int = -1,
 ) -> torch.Tensor:
-    ignored = [label for label in segment_ignore_index if label != semantic_ignore_index]
+    ignored = [
+        label for label in segment_ignore_index if label != semantic_ignore_index
+    ]
     for label in ignored:
         labels[labels == label] = semantic_ignore_index
     for label in sorted([label for label in ignored if label >= 0], reverse=True):

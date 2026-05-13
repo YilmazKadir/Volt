@@ -36,7 +36,9 @@ class SPFormer(nn.Module):
         ignored = sorted([i for i in self.segment_ignore_index if i >= 0])
         total = self.semantic_num_classes + len(ignored)
         kept = [i for i in range(total) if i not in ignored]
-        self.register_buffer("class_map", torch.tensor(kept, dtype=torch.long), persistent=False)
+        self.register_buffer(
+            "class_map", torch.tensor(kept, dtype=torch.long), persistent=False
+        )
 
         self.backbone = build_model(backbone)
         self.decoder = build_model(decoder)
@@ -114,7 +116,9 @@ class SPFormer(nn.Module):
 
             p_ins_mask = p_ins.clone()
             if torch.sum(p_ins_mask == self.instance_ignore_index) != 0:
-                p_ins_mask[p_ins_mask == self.instance_ignore_index] = torch.max(p_ins_mask) + 1
+                p_ins_mask[p_ins_mask == self.instance_ignore_index] = (
+                    torch.max(p_ins_mask) + 1
+                )
                 p_ins_mask = torch.nn.functional.one_hot(p_ins_mask)[:, :-1]
             else:
                 p_ins_mask = torch.nn.functional.one_hot(p_ins_mask)
@@ -123,7 +127,9 @@ class SPFormer(nn.Module):
                 p_ins_mask = p_ins_mask.T
                 sp_ins_mask = scatter_mean(p_ins_mask.float(), p_sp, dim=-1) > 0.5
             else:
-                sp_ins_mask = p_ins_mask.new_zeros((0, p_sp.max() + 1), dtype=torch.bool)
+                sp_ins_mask = p_ins_mask.new_zeros(
+                    (0, p_sp.max() + 1), dtype=torch.bool
+                )
 
             unique_insts = p_ins.unique()
             insts = unique_insts[unique_insts != self.instance_ignore_index]

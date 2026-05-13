@@ -463,7 +463,9 @@ class InsSegEvaluator(HookBase):
                                         or gt["dist_conf"] < distance_conf
                                     ):
                                         num_ignore += gt["intersection"]
-                                proportion_ignore = float(num_ignore) / pred["vert_count"]
+                                proportion_ignore = (
+                                    float(num_ignore) / pred["vert_count"]
+                                )
                                 if proportion_ignore <= overlap_th:
                                     cur_true = np.append(cur_true, 0)
                                     cur_score = np.append(cur_score, pred["confidence"])

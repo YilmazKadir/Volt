@@ -5,7 +5,6 @@ from torch.amp import autocast
 
 from ..builder import MODELS, build_model
 
-
 _CE_LABEL_SMOOTHING = 0.05
 _LARGE_CONSTANT = 1e6
 
@@ -59,7 +58,10 @@ class QueryClassificationCost:
         self.weight = weight
 
     def __call__(self, pred_instances, gt_instances, **kwargs):
-        return -pred_instances["scores"].softmax(-1)[:, gt_instances["labels"]] * self.weight
+        return (
+            -pred_instances["scores"].softmax(-1)[:, gt_instances["labels"]]
+            * self.weight
+        )
 
 
 @MODELS.register_module("SPFormerMaskBCECost")
@@ -138,7 +140,8 @@ class SPFormerCriterion:
         cls_preds = aux_outputs["labels"]
         pred_masks = aux_outputs["masks"]
         pred_insts = [
-            dict(scores=cls_preds[i], masks=pred_masks[i]) for i in range(len(cls_preds))
+            dict(scores=cls_preds[i], masks=pred_masks[i])
+            for i in range(len(cls_preds))
         ]
         if indices is None:
             indices = [self.matcher(pred_insts[i], insts[i]) for i in range(len(insts))]
@@ -146,15 +149,21 @@ class SPFormerCriterion:
         cls_losses = []
         for cls_pred, inst, (idx_q, idx_gt) in zip(cls_preds, insts, indices):
             n_classes = cls_pred.shape[1] - 1
-            cls_target = cls_pred.new_full((len(cls_pred),), n_classes, dtype=torch.long)
+            cls_target = cls_pred.new_full(
+                (len(cls_pred),), n_classes, dtype=torch.long
+            )
             cls_target[idx_q] = inst["labels"][idx_gt]
             cls_losses.append(
-                _cross_entropy(cls_pred, cls_target, cls_pred.new_tensor(self.class_weight))
+                _cross_entropy(
+                    cls_pred, cls_target, cls_pred.new_tensor(self.class_weight)
+                )
             )
         cls_loss = torch.mean(torch.stack(cls_losses))
 
         score_losses, mask_bce_losses, mask_dice_losses = [], [], []
-        for batch_i, (mask, inst, (idx_q, idx_gt)) in enumerate(zip(pred_masks, insts, indices)):
+        for batch_i, (mask, inst, (idx_q, idx_gt)) in enumerate(
+            zip(pred_masks, insts, indices)
+        ):
             if inst["masks"].shape[0] == 0:
                 continue
             pred_mask = mask[idx_q]
@@ -171,12 +180,16 @@ class SPFormerCriterion:
                 tgt_score = get_iou(pred_mask, tgt_mask).unsqueeze(1)
             filter_id, _ = torch.where(tgt_score > 0.5)
             if filter_id.numel():
-                score_losses.append(F.mse_loss(pred_score[filter_id], tgt_score[filter_id]))
+                score_losses.append(
+                    F.mse_loss(pred_score[filter_id], tgt_score[filter_id])
+                )
 
         if len(score_losses):
             score_loss = torch.stack(score_losses).sum() / len(pred_masks)
         else:
-            score_loss = torch.tensor(0.0, requires_grad=True, device=pred_masks[0].device)
+            score_loss = torch.tensor(
+                0.0, requires_grad=True, device=pred_masks[0].device
+            )
 
         if len(mask_bce_losses):
             mask_bce_loss = torch.stack(mask_bce_losses).sum() / len(pred_masks)
@@ -185,7 +198,9 @@ class SPFormerCriterion:
                 mask_dice_loss = mask_dice_loss / len(pred_masks) * 4
             if self.fix_mean_loss:
                 mask_bce_loss = mask_bce_loss * len(pred_masks) / len(mask_bce_losses)
-                mask_dice_loss = mask_dice_loss * len(pred_masks) / len(mask_dice_losses)
+                mask_dice_loss = (
+                    mask_dice_loss * len(pred_masks) / len(mask_dice_losses)
+                )
         else:
             device = pred_masks[0].device
             mask_bce_loss = torch.tensor(0.0, requires_grad=True, device=device)
@@ -203,22 +218,29 @@ class SPFormerCriterion:
         cls_preds = pred["labels"]
         pred_masks = pred["masks"]
         pred_insts = [
-            dict(scores=cls_preds[i], masks=pred_masks[i]) for i in range(len(cls_preds))
+            dict(scores=cls_preds[i], masks=pred_masks[i])
+            for i in range(len(cls_preds))
         ]
         indices = [self.matcher(pred_insts[i], insts[i]) for i in range(len(insts))]
 
         cls_losses = []
         for cls_pred, inst, (idx_q, idx_gt) in zip(cls_preds, insts, indices):
             n_classes = cls_pred.shape[1] - 1
-            cls_target = cls_pred.new_full((len(cls_pred),), n_classes, dtype=torch.long)
+            cls_target = cls_pred.new_full(
+                (len(cls_pred),), n_classes, dtype=torch.long
+            )
             cls_target[idx_q] = inst["labels"][idx_gt]
             cls_losses.append(
-                _cross_entropy(cls_pred, cls_target, cls_pred.new_tensor(self.class_weight))
+                _cross_entropy(
+                    cls_pred, cls_target, cls_pred.new_tensor(self.class_weight)
+                )
             )
         cls_loss = torch.mean(torch.stack(cls_losses))
 
         score_losses, mask_bce_losses, mask_dice_losses = [], [], []
-        for i, (mask, inst, (idx_q, idx_gt)) in enumerate(zip(pred_masks, insts, indices)):
+        for i, (mask, inst, (idx_q, idx_gt)) in enumerate(
+            zip(pred_masks, insts, indices)
+        ):
             if inst["masks"].shape[0] == 0:
                 continue
             pred_mask = mask[idx_q]
@@ -234,12 +256,16 @@ class SPFormerCriterion:
                 tgt_score = get_iou(pred_mask, tgt_mask).unsqueeze(1)
             filter_id, _ = torch.where(tgt_score > 0.5)
             if filter_id.numel():
-                score_losses.append(F.mse_loss(pred_score[filter_id], tgt_score[filter_id]))
+                score_losses.append(
+                    F.mse_loss(pred_score[filter_id], tgt_score[filter_id])
+                )
 
         if len(score_losses):
             score_loss = torch.stack(score_losses).sum() / len(pred_masks)
         else:
-            score_loss = torch.tensor(0.0, requires_grad=True, device=pred_masks[0].device)
+            score_loss = torch.tensor(
+                0.0, requires_grad=True, device=pred_masks[0].device
+            )
 
         if len(mask_bce_losses):
             mask_bce_loss = torch.stack(mask_bce_losses).sum() / len(pred_masks)
@@ -248,7 +274,9 @@ class SPFormerCriterion:
                 mask_dice_loss = mask_dice_loss / len(pred_masks) * 4
             if self.fix_mean_loss:
                 mask_bce_loss = mask_bce_loss * len(pred_masks) / len(mask_bce_losses)
-                mask_dice_loss = mask_dice_loss * len(pred_masks) / len(mask_dice_losses)
+                mask_dice_loss = (
+                    mask_dice_loss * len(pred_masks) / len(mask_dice_losses)
+                )
         else:
             device = pred_masks[0].device
             mask_bce_loss = torch.tensor(0.0, requires_grad=True, device=device)

@@ -152,7 +152,12 @@ class SPFormerDecoder(nn.Module):
                 attn_mask[torch.where(attn_mask.sum(-1) == attn_mask.shape[-1])] = False
                 attn_masks.append(attn_mask.detach())
             pred_masks.append(pred_mask)
-        return pred_labels, pred_scores, pred_masks, attn_masks if self.attn_mask else None
+        return (
+            pred_labels,
+            pred_scores,
+            pred_masks,
+            attn_masks if self.attn_mask else None,
+        )
 
     def _get_query(self, batch_size):
         pe = (
@@ -180,9 +185,7 @@ class SPFormerDecoder(nn.Module):
         pred_masks.append(pred_mask)
 
         for i in range(self.num_layer):
-            query = self.cross_attn_layers[i](
-                inst_feats, query, attn_mask, query_pe=pe
-            )
+            query = self.cross_attn_layers[i](inst_feats, query, attn_mask, query_pe=pe)
             query = self.self_attn_layers[i](query, pe)
             query = self.ffn_layers[i](query)
             pred_label, pred_score, pred_mask, attn_mask = self._forward_head(

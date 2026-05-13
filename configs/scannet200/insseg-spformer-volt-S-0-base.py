@@ -107,9 +107,13 @@ data = dict(
         data_root=data_root,
         transform=[
             dict(type="CenterShift", apply_z=True),
-            dict(type="RandomDropout", dropout_ratio=0.2, dropout_application_ratio=0.5),
+            dict(
+                type="RandomDropout", dropout_ratio=0.2, dropout_application_ratio=0.5
+            ),
             dict(type="RandomFlip", p=0.5),
-            dict(type="RandomRotate", angle=[-1, 1], axis="z", center=[0, 0, 0], p=0.95),
+            dict(
+                type="RandomRotate", angle=[-1, 1], axis="z", center=[0, 0, 0], p=0.95
+            ),
             dict(type="RandomRotate", angle=[-1 / 24, 1 / 24], axis="x", p=0.95),
             dict(type="RandomRotate", angle=[-1 / 24, 1 / 24], axis="y", p=0.95),
             dict(type="RandomScale", scale=[0.8, 1.2]),

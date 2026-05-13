@@ -992,7 +992,9 @@ class InsSegTester(TesterBase):
                             data_dict["origin_offset"].int(),
                         )
                         reverse = reverse.cpu().flatten().long()
-                        output_dict["pred_masks"] = output_dict["pred_masks"][:, reverse]
+                        output_dict["pred_masks"] = output_dict["pred_masks"][
+                            :, reverse
+                        ]
 
                 gt_instances, pred_instance = self.associate_instances(
                     output_dict, segment, instance
