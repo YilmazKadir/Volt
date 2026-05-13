@@ -113,6 +113,26 @@ sh scripts/train.sh -g 4 -d semantic_kitti -c semseg-volt-joint-small -n semseg-
 sh scripts/train.sh -g 4 -d waymo -c semseg-volt-joint-small -n semseg-volt-joint-small
 ```
 
+### Instance Segmentation
+
+Download the pretrained jointly trained Volt-S backbone weights from [HuggingFace](https://huggingface.co/KadirYilmaz/Volt/tree/main)
+
+```bash
+mkdir -p weights
+curl -L -o weights/volt-small-scannet.pth    https://huggingface.co/KadirYilmaz/Volt/resolve/main/Volt_experiments/joint_training_small/scannet/model/model_last.pth
+curl -L -o weights/volt-small-scannet200.pth https://huggingface.co/KadirYilmaz/Volt/resolve/main/Volt_experiments/joint_training_small/scannet200/model/model_last.pth
+```
+Alternatively you can train them yourself using the corresponding configs above.
+
+Then, run the training script with the `insseg-spformer-volt-S-0-base` config for scannet/scannet200
+
+```bash
+### ScanNet
+sh scripts/train.sh -g 4 -d scannet -c insseg-spformer-volt-S-0-base -n insseg-volt
+### ScanNet200
+sh scripts/train.sh -g 4 -d scannet200 -c insseg-spformer-volt-S-0-base -n insseg-volt
+```
+
 ## Model Zoo
 
 We provide the experiment directories, including configs, logs, and checkpoints. The experiments can also be seen from [Hugging Face](https://huggingface.co/KadirYilmaz/Volt/tree/main).

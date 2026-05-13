@@ -21,6 +21,7 @@ from .context_aware_classifier import *
 # Instance Segmentation
 from .point_group import *
 from .sgiformer import *
+from .spformer import *
 
 # Pretraining
 from .masked_scene_contrast import *

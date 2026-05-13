@@ -32,6 +32,7 @@ class ScanNetDataset(DefaultDataset):
         "normal",
         "segment20",
         "instance",
+        "superpoint",
     ]
     class2id = np.array(VALID_CLASS_IDS_20)
 
@@ -97,6 +98,8 @@ class ScanNetDataset(DefaultDataset):
             data_dict["instance"] = (
                 np.ones(data_dict["coord"].shape[0], dtype=np.int32) * -1
             )
+        if "superpoint" in data_dict.keys():
+            data_dict["superpoint"] = data_dict["superpoint"].astype(np.int32)
         if self.la:
             sampled_index = self.la[self.get_data_name(idx)]
             mask = np.ones_like(data_dict["segment"], dtype=bool)
@@ -114,5 +117,6 @@ class ScanNet200Dataset(ScanNetDataset):
         "normal",
         "segment200",
         "instance",
+        "superpoint",
     ]
     class2id = np.array(VALID_CLASS_IDS_200)

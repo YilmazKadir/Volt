@@ -264,9 +264,13 @@ class SemSegEvaluator(HookBase):
 
 @HOOKS.register_module()
 class InsSegEvaluator(HookBase):
-    def __init__(self, segment_ignore_index=(-1,), instance_ignore_index=-1):
-        self.segment_ignore_index = segment_ignore_index
-        self.instance_ignore_index = instance_ignore_index
+    def __init__(
+        self,
+        segment_ignore_index=(-1, 0, 2),
+        instance_ignore_index=-1,
+    ):
+        self.segment_ignore_index = tuple(segment_ignore_index)
+        self.instance_ignore_index = int(instance_ignore_index)
 
         self.valid_class_names = None  # update in before train
         self.overlaps = np.append(np.arange(0.5, 0.95, 0.05), 0.25)
@@ -280,6 +284,11 @@ class InsSegEvaluator(HookBase):
             for i in range(self.trainer.cfg.data.num_classes)
             if i not in self.segment_ignore_index
         ]
+        self.class_name_map = {
+            i: self.trainer.cfg.data.names[i]
+            for i in range(self.trainer.cfg.data.num_classes)
+            if i not in self.segment_ignore_index
+        }
 
     def after_epoch(self):
         if self.trainer.cfg.evaluate:
@@ -288,19 +297,17 @@ class InsSegEvaluator(HookBase):
     def associate_instances(self, pred, segment, instance):
         segment = segment.cpu().numpy()
         instance = instance.cpu().numpy()
-        void_mask = np.in1d(segment, self.segment_ignore_index)
+        pred_classes = np.asarray(pred["pred_classes"])
+        void_mask = np.isin(segment, self.segment_ignore_index)
+        gt_instances = {name: [] for name in self.valid_class_names}
+        pred_instances = {name: [] for name in self.valid_class_names}
 
         assert (
-            pred["pred_classes"].shape[0]
+            pred_classes.shape[0]
             == pred["pred_scores"].shape[0]
             == pred["pred_masks"].shape[0]
         )
         assert pred["pred_masks"].shape[1] == segment.shape[0] == instance.shape[0]
-        # get gt instances
-        gt_instances = dict()
-        for i in range(self.trainer.cfg.data.num_classes):
-            if i not in self.segment_ignore_index:
-                gt_instances[self.trainer.cfg.data.names[i]] = []
         instance_ids, idx, counts = np.unique(
             instance, return_index=True, return_counts=True
         )
@@ -317,21 +324,16 @@ class InsSegEvaluator(HookBase):
             gt_inst["med_dist"] = -1.0
             gt_inst["vert_count"] = counts[i]
             gt_inst["matched_pred"] = []
-            gt_instances[self.trainer.cfg.data.names[segment_ids[i]]].append(gt_inst)
+            gt_instances[self.class_name_map[segment_ids[i]]].append(gt_inst)
 
-        # get pred instances and associate with gt
-        pred_instances = dict()
-        for i in range(self.trainer.cfg.data.num_classes):
-            if i not in self.segment_ignore_index:
-                pred_instances[self.trainer.cfg.data.names[i]] = []
         instance_id = 0
-        for i in range(len(pred["pred_classes"])):
-            if pred["pred_classes"][i] in self.segment_ignore_index:
+        for i in range(len(pred_classes)):
+            if pred_classes[i] in self.segment_ignore_index:
                 continue
             pred_inst = dict()
             pred_inst["uuid"] = uuid4()
             pred_inst["instance_id"] = instance_id
-            pred_inst["segment_id"] = pred["pred_classes"][i]
+            pred_inst["segment_id"] = pred_classes[i]
             pred_inst["confidence"] = pred["pred_scores"][i]
             pred_inst["mask"] = np.not_equal(pred["pred_masks"][i], 0)
             pred_inst["vert_count"] = np.count_nonzero(pred_inst["mask"])
@@ -339,10 +341,10 @@ class InsSegEvaluator(HookBase):
                 np.logical_and(void_mask, pred_inst["mask"])
             )
             if pred_inst["vert_count"] < self.min_region_sizes:
-                continue  # skip if empty
-            segment_name = self.trainer.cfg.data.names[pred_inst["segment_id"]]
+                continue
+            segment_name = self.class_name_map[pred_inst["segment_id"]]
             matched_gt = []
-            for gt_idx, gt_inst in enumerate(gt_instances[segment_name]):
+            for gt_inst in gt_instances[segment_name]:
                 intersection = np.count_nonzero(
                     np.logical_and(
                         instance == gt_inst["instance_id"], pred_inst["mask"]
@@ -365,11 +367,11 @@ class InsSegEvaluator(HookBase):
         min_region_sizes = [self.min_region_sizes]
         dist_threshes = [self.distance_threshes]
         dist_confs = [self.distance_confs]
-
-        # results: class x overlap
         ap_table = np.zeros(
             (len(dist_threshes), len(self.valid_class_names), len(overlaps)), float
         )
+        pr_rc = np.zeros((2, len(self.valid_class_names), len(overlaps)), float)
+
         for di, (min_region_size, distance_thresh, distance_conf) in enumerate(
             zip(min_region_sizes, dist_threshes, dist_confs)
         ):
@@ -381,16 +383,18 @@ class InsSegEvaluator(HookBase):
                             for p in scene["pred"][label_name]:
                                 if "uuid" in p:
                                     pred_visited[p["uuid"]] = False
+
                 for li, label_name in enumerate(self.valid_class_names):
                     y_true = np.empty(0)
                     y_score = np.empty(0)
                     hard_false_negatives = 0
                     has_gt = False
                     has_pred = False
+
                     for scene in scenes:
                         pred_instances = scene["pred"][label_name]
                         gt_instances = scene["gt"][label_name]
-                        # filter groups in ground truth
+
                         gt_instances = [
                             gt
                             for gt in gt_instances
@@ -406,11 +410,10 @@ class InsSegEvaluator(HookBase):
                         cur_true = np.ones(len(gt_instances))
                         cur_score = np.ones(len(gt_instances)) * (-float("inf"))
                         cur_match = np.zeros(len(gt_instances), dtype=bool)
-                        # collect matches
+
                         for gti, gt in enumerate(gt_instances):
                             found_match = False
                             for pred in gt["matched_pred"]:
-                                # greedy assignments
                                 if pred_visited[pred["uuid"]]:
                                     continue
                                 overlap = float(pred["intersection"]) / (
@@ -420,17 +423,13 @@ class InsSegEvaluator(HookBase):
                                 )
                                 if overlap > overlap_th:
                                     confidence = pred["confidence"]
-                                    # if already have a prediction for this gt,
-                                    # the prediction with the lower score is automatically a false positive
                                     if cur_match[gti]:
                                         max_score = max(cur_score[gti], confidence)
                                         min_score = min(cur_score[gti], confidence)
                                         cur_score[gti] = max_score
-                                        # append false positive
                                         cur_true = np.append(cur_true, 0)
                                         cur_score = np.append(cur_score, min_score)
                                         cur_match = np.append(cur_match, True)
-                                    # otherwise set score
                                     else:
                                         found_match = True
                                         cur_match[gti] = True
@@ -438,11 +437,10 @@ class InsSegEvaluator(HookBase):
                                         pred_visited[pred["uuid"]] = True
                             if not found_match:
                                 hard_false_negatives += 1
-                        # remove non-matched ground truth instances
+
                         cur_true = cur_true[cur_match]
                         cur_score = cur_score[cur_match]
 
-                        # collect non-matched predictions as false positive
                         for pred in pred_instances:
                             found_gt = False
                             for gt in pred["matched_gt"]:
@@ -459,7 +457,6 @@ class InsSegEvaluator(HookBase):
                                 for gt in pred["matched_gt"]:
                                     if gt["segment_id"] in self.segment_ignore_index:
                                         num_ignore += gt["intersection"]
-                                    # small ground truth instances
                                     if (
                                         gt["vert_count"] < min_region_size
                                         or gt["med_dist"] > distance_thresh
@@ -469,203 +466,266 @@ class InsSegEvaluator(HookBase):
                                 proportion_ignore = (
                                     float(num_ignore) / pred["vert_count"]
                                 )
-                                # if not ignored append false positive
                                 if proportion_ignore <= overlap_th:
                                     cur_true = np.append(cur_true, 0)
-                                    confidence = pred["confidence"]
-                                    cur_score = np.append(cur_score, confidence)
+                                    cur_score = np.append(cur_score, pred["confidence"])
 
-                        # append to overall results
                         y_true = np.append(y_true, cur_true)
                         y_score = np.append(y_score, cur_score)
 
-                    # compute average precision
                     if has_gt and has_pred:
-                        # compute precision recall curve first
-
-                        # sorting and cumsum
                         score_arg_sort = np.argsort(y_score)
                         y_score_sorted = y_score[score_arg_sort]
                         y_true_sorted = y_true[score_arg_sort]
                         y_true_sorted_cumsum = np.cumsum(y_true_sorted)
 
-                        # unique thresholds
-                        thresholds, unique_indices = np.unique(
-                            y_score_sorted, return_index=True
-                        )
+                        _, unique_indices = np.unique(y_score_sorted, return_index=True)
                         num_prec_recall = len(unique_indices) + 1
-
-                        # prepare precision recall
                         num_examples = len(y_score_sorted)
-                        # https://github.com/ScanNet/ScanNet/pull/26
-                        # all predictions are non-matched but also all of them are ignored and not counted as FP
-                        # y_true_sorted_cumsum is empty
-                        # num_true_examples = y_true_sorted_cumsum[-1]
                         num_true_examples = (
                             y_true_sorted_cumsum[-1]
                             if len(y_true_sorted_cumsum) > 0
                             else 0
                         )
+
                         precision = np.zeros(num_prec_recall)
                         recall = np.zeros(num_prec_recall)
 
-                        # deal with the first point
                         y_true_sorted_cumsum = np.append(y_true_sorted_cumsum, 0)
-                        # deal with remaining
                         for idx_res, idx_scores in enumerate(unique_indices):
                             cumsum = y_true_sorted_cumsum[idx_scores - 1]
                             tp = num_true_examples - cumsum
                             fp = num_examples - idx_scores - tp
                             fn = cumsum + hard_false_negatives
-                            p = float(tp) / (tp + fp)
-                            r = float(tp) / (tp + fn)
+                            p = float(tp) / (tp + fp) if (tp + fp) > 0 else 0.0
+                            r = float(tp) / (tp + fn) if (tp + fn) > 0 else 0.0
                             precision[idx_res] = p
                             recall[idx_res] = r
 
-                        # first point in curve is artificial
                         precision[-1] = 1.0
                         recall[-1] = 0.0
 
-                        # compute average of precision-recall curve
+                        f1_score = 2 * precision * recall / (precision + recall + 1e-4)
+                        f1_argmax = f1_score.argmax()
+                        best_pr = precision[f1_argmax]
+                        best_rc = recall[f1_argmax]
+
                         recall_for_conv = np.copy(recall)
                         recall_for_conv = np.append(recall_for_conv[0], recall_for_conv)
                         recall_for_conv = np.append(recall_for_conv, 0.0)
-
-                        stepWidths = np.convolve(
+                        step_widths = np.convolve(
                             recall_for_conv, [-0.5, 0, 0.5], "valid"
                         )
-                        # integrate is now simply a dot product
-                        ap_current = np.dot(precision, stepWidths)
-
+                        ap_current = np.dot(precision, step_widths)
                     elif has_gt:
                         ap_current = 0.0
+                        best_pr = 0.0
+                        best_rc = 0.0
                     else:
                         ap_current = float("nan")
+                        best_pr = float("nan")
+                        best_rc = float("nan")
+
                     ap_table[di, li, oi] = ap_current
+                    pr_rc[0, li, oi] = best_pr
+                    pr_rc[1, li, oi] = best_rc
+
         d_inf = 0
         o50 = np.where(np.isclose(self.overlaps, 0.5))
         o25 = np.where(np.isclose(self.overlaps, 0.25))
-        oAllBut25 = np.where(np.logical_not(np.isclose(self.overlaps, 0.25)))
+        o_all_but_25 = np.where(np.logical_not(np.isclose(self.overlaps, 0.25)))
+
         ap_scores = dict()
-        ap_scores["all_ap"] = np.nanmean(ap_table[d_inf, :, oAllBut25])
+        ap_scores["all_ap"] = np.nanmean(ap_table[d_inf, :, o_all_but_25])
         ap_scores["all_ap_50%"] = np.nanmean(ap_table[d_inf, :, o50])
         ap_scores["all_ap_25%"] = np.nanmean(ap_table[d_inf, :, o25])
+        ap_scores["all_prec_50%"] = np.nanmean(pr_rc[0, :, o50])
+        ap_scores["all_rec_50%"] = np.nanmean(pr_rc[1, :, o50])
         ap_scores["classes"] = {}
         for li, label_name in enumerate(self.valid_class_names):
-            ap_scores["classes"][label_name] = {}
-            ap_scores["classes"][label_name]["ap"] = np.average(
-                ap_table[d_inf, li, oAllBut25]
-            )
-            ap_scores["classes"][label_name]["ap50%"] = np.average(
-                ap_table[d_inf, li, o50]
-            )
-            ap_scores["classes"][label_name]["ap25%"] = np.average(
-                ap_table[d_inf, li, o25]
-            )
+            ap_scores["classes"][label_name] = {
+                "ap": np.average(ap_table[d_inf, li, o_all_but_25]),
+                "ap50%": np.average(ap_table[d_inf, li, o50]),
+                "ap25%": np.average(ap_table[d_inf, li, o25]),
+                "prec50%": np.average(pr_rc[0, li, o50]),
+                "rec50%": np.average(pr_rc[1, li, o50]),
+            }
         return ap_scores
+
+    def print_results(self, ap_scores):
+        all_ap = ap_scores["all_ap"]
+        all_ap_50 = ap_scores["all_ap_50%"]
+        all_ap_25 = ap_scores["all_ap_25%"]
+        all_prec_50 = ap_scores["all_prec_50%"]
+        all_rec_50 = ap_scores["all_rec_50%"]
+
+        sep = ""
+        col1 = ":"
+        line_len = 66
+        self.trainer.logger.info("#" * line_len)
+        line = ""
+        line += "{:<15}".format("what") + sep + col1
+        line += "{:>10}".format("AP") + sep
+        line += "{:>10}".format("AP_50%") + sep
+        line += "{:>10}".format("AP_25%") + sep
+        line += "{:>10}".format("Prec_50%") + sep
+        line += "{:>10}".format("Rec_50%") + sep
+        self.trainer.logger.info(line)
+        self.trainer.logger.info("#" * line_len)
+
+        for label_name in self.valid_class_names:
+            ap = ap_scores["classes"][label_name]["ap"]
+            ap_50 = ap_scores["classes"][label_name]["ap50%"]
+            ap_25 = ap_scores["classes"][label_name]["ap25%"]
+            prec_50 = ap_scores["classes"][label_name]["prec50%"]
+            rec_50 = ap_scores["classes"][label_name]["rec50%"]
+            line = "{:<15}".format(label_name) + sep + col1
+            line += sep + "{:>10.3f}".format(ap) + sep
+            line += sep + "{:>10.3f}".format(ap_50) + sep
+            line += sep + "{:>10.3f}".format(ap_25) + sep
+            line += sep + "{:>10.3f}".format(prec_50) + sep
+            line += sep + "{:>10.3f}".format(rec_50) + sep
+            self.trainer.logger.info(line)
+
+        self.trainer.logger.info("-" * line_len)
+        line = "{:<15}".format("average") + sep + col1
+        line += "{:>10.3f}".format(all_ap) + sep
+        line += "{:>10.3f}".format(all_ap_50) + sep
+        line += "{:>10.3f}".format(all_ap_25) + sep
+        line += "{:>10.3f}".format(all_prec_50) + sep
+        line += "{:>10.3f}".format(all_rec_50) + sep
+        self.trainer.logger.info(line)
+        self.trainer.logger.info("#" * line_len)
 
     def eval(self):
         self.trainer.logger.info(">>>>>>>>>>>>>>>> Start Evaluation >>>>>>>>>>>>>>>>")
         self.trainer.model.eval()
-        scenes = {}
-        for i, input_dict in enumerate(self.trainer.val_loader):
-            assert (
-                len(input_dict["offset"]) == 1
-            )  # currently only support bs 1 for each GPU
-            data_name = input_dict.pop("name")[0]
+        scenes = []
+        val_loader = self.trainer.val_loader
+        if isinstance(val_loader, (list, tuple)):
+            val_loader = val_loader[0]
+
+        val_sum = 0.0
+        val_n = 0
+        val_loss_sums = {}
+
+        for i, input_dict in enumerate(val_loader):
+            assert len(input_dict["offset"]) == 1
             for key in input_dict.keys():
                 if isinstance(input_dict[key], torch.Tensor):
                     input_dict[key] = input_dict[key].cuda(non_blocking=True)
             with torch.no_grad():
-                with torch.amp.autocast(
-                    "cuda",
-                    enabled=self.trainer.cfg.enable_amp,
-                    dtype=AMP_DTYPE[self.trainer.cfg.amp_dtype],
-                ):
-                    if self.trainer.cfg.use_ema:
-                        output_dict = self.trainer.ema(input_dict)
-                    else:
-                        output_dict = self.trainer.model(input_dict)
+                if self.trainer.cfg.use_ema:
+                    output_dict = self.trainer.ema(input_dict)
+                else:
+                    output_dict = self.trainer.model(input_dict)
 
             loss = output_dict["loss"]
+            losses = {
+                k: v for k, v in output_dict.items() if ("loss" in k and k != "loss")
+            }
 
             segment = input_dict["segment"]
             instance = input_dict["instance"]
-            # map to origin
             if "origin_coord" in input_dict.keys():
-                idx, _ = pointops.knn_query(
-                    1,
-                    input_dict["coord"].float(),
-                    input_dict["offset"].int(),
-                    input_dict["origin_coord"].float(),
-                    input_dict["origin_offset"].int(),
-                )
-                idx = idx.cpu().flatten().long()
-                output_dict["pred_masks"] = output_dict["pred_masks"][:, idx]
                 segment = input_dict["origin_segment"]
                 instance = input_dict["origin_instance"]
+                if output_dict["pred_masks"].shape[1] != segment.shape[0]:
+                    reverse, _ = pointops.knn_query(
+                        1,
+                        input_dict["coord"].float(),
+                        input_dict["offset"].int(),
+                        input_dict["origin_coord"].float(),
+                        input_dict["origin_offset"].int(),
+                    )
+                    reverse = reverse.cpu().flatten().long()
+                    output_dict["pred_masks"] = output_dict["pred_masks"][:, reverse]
 
             gt_instances, pred_instance = self.associate_instances(
                 output_dict, segment, instance
             )
-            scenes[data_name] = dict(gt=gt_instances, pred=pred_instance)
+            scenes.append(dict(gt=gt_instances, pred=pred_instance))
 
-            self.trainer.storage.put_scalar("val_loss", loss.item())
+            val_sum += float(loss.item())
+            val_n += 1
+            for key, value in losses.items():
+                val_loss_sums[key] = val_loss_sums.get(key, 0.0) + float(value.item())
+
             self.trainer.logger.info(
-                "Test: [{iter}/{max_iter}] "
-                "Loss {loss:.4f} ".format(
-                    iter=i + 1, max_iter=len(self.trainer.val_loader), loss=loss.item()
+                "Test: [{iter}/{max_iter}] Loss {loss:.4f} ".format(
+                    iter=i + 1, max_iter=len(val_loader), loss=loss.item()
                 )
             )
+            torch.cuda.empty_cache()
 
-        loss_avg = self.trainer.storage.history("val_loss").avg
+        loss_avg = {}
+        if val_n > 0:
+            loss_avg["val_loss"] = val_sum / val_n
+            for key in val_loss_sums.keys():
+                loss_avg[key] = val_loss_sums[key] / val_n
+        else:
+            loss_avg["val_loss"] = float("nan")
+            for key in val_loss_sums.keys():
+                loss_avg[key] = float("nan")
+
         comm.synchronize()
         scenes_sync = comm.gather(scenes, dst=0)
 
         if comm.is_main_process():
-            scenes = {}
-            for _ in range(len(scenes_sync)):
-                r = scenes_sync.pop()
-                scenes.update(r)
-                del r
-            scenes = list(scenes.values())
+            scenes = [scene for scenes_ in scenes_sync for scene in scenes_]
             ap_scores = self.evaluate_matches(scenes)
-            all_ap = ap_scores["all_ap"]
-            all_ap_50 = ap_scores["all_ap_50%"]
-            all_ap_25 = ap_scores["all_ap_25%"]
-            self.trainer.logger.info(
-                "Val result: mAP/AP50/AP25 {:.4f}/{:.4f}/{:.4f}.".format(
-                    all_ap, all_ap_50, all_ap_25
-                )
-            )
-            for i, label_name in enumerate(self.valid_class_names):
-                ap = ap_scores["classes"][label_name]["ap"]
-                ap_50 = ap_scores["classes"][label_name]["ap50%"]
-                ap_25 = ap_scores["classes"][label_name]["ap25%"]
-                self.trainer.logger.info(
-                    "Class_{idx}-{name} Result: AP/AP50/AP25 {AP:.4f}/{AP50:.4f}/{AP25:.4f}".format(
-                        idx=i, name=label_name, AP=ap, AP50=ap_50, AP25=ap_25
-                    )
-                )
+            self.print_results(ap_scores)
             current_epoch = self.trainer.epoch + 1
             if self.trainer.writer is not None:
-                self.trainer.writer.add_scalar("val/loss", loss_avg, current_epoch)
-                self.trainer.writer.add_scalar("val/mAP", all_ap, current_epoch)
-                self.trainer.writer.add_scalar("val/AP50", all_ap_50, current_epoch)
-                self.trainer.writer.add_scalar("val/AP25", all_ap_25, current_epoch)
+                self.trainer.writer.add_scalar(
+                    "val/loss", loss_avg["val_loss"], current_epoch
+                )
+                for key in loss_avg.keys():
+                    if key == "val_loss":
+                        continue
+                    self.trainer.writer.add_scalar(
+                        "val/" + key, loss_avg[key], current_epoch
+                    )
+                self.trainer.writer.add_scalar(
+                    "val/mAP", ap_scores["all_ap"], current_epoch
+                )
+                self.trainer.writer.add_scalar(
+                    "val/AP50", ap_scores["all_ap_50%"], current_epoch
+                )
+                self.trainer.writer.add_scalar(
+                    "val/AP25", ap_scores["all_ap_25%"], current_epoch
+                )
+                self.trainer.writer.add_scalar(
+                    "val/Prec50", ap_scores["all_prec_50%"], current_epoch
+                )
+                self.trainer.writer.add_scalar(
+                    "val/Rec50", ap_scores["all_rec_50%"], current_epoch
+                )
                 if self.trainer.cfg.enable_wandb:
                     wandb.log(
                         {
                             "Epoch": current_epoch,
-                            "val/loss": loss_avg,
-                            "val/mAP": all_ap,
-                            "val/AP50": all_ap_50,
-                            "val/AP25": all_ap_25,
+                            "val/loss": loss_avg["val_loss"],
+                            "val/mAP": ap_scores["all_ap"],
+                            "val/AP50": ap_scores["all_ap_50%"],
+                            "val/AP25": ap_scores["all_ap_25%"],
+                            "val/Prec50": ap_scores["all_prec_50%"],
+                            "val/Rec50": ap_scores["all_rec_50%"],
                         },
                         step=wandb.run.step,
                     )
+                    for key in loss_avg.keys():
+                        if key == "val_loss":
+                            continue
+                        wandb.log(
+                            {
+                                "Epoch": current_epoch,
+                                "val/" + key: loss_avg[key],
+                            },
+                            step=wandb.run.step,
+                        )
             self.trainer.logger.info(
-                "<<<<<<<<<<<<<<<<< End Evaluation <<<<<<<<<<<<<<<<<"
+                "<<<<<<<<<<<<<<<<<<< End Evaluation <<<<<<<<<<<<<<<<<"
             )
-            self.trainer.comm_info["current_metric_value"] = all_ap_50  # save for saver
-            self.trainer.comm_info["current_metric_name"] = "AP50"  # save for saver
+            self.trainer.comm_info["current_metric_value"] = ap_scores["all_ap_50%"]
+            self.trainer.comm_info["current_metric_name"] = "AP50"
