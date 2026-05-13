@@ -118,7 +118,9 @@ def point_collate_fn(batch, mix_prob=0):
                     if "superpoint" in batch:
                         sp0 = batch["superpoint"][pt0s:pt0e]
                         valid0 = sp0 >= 0
-                        sp_shift = int(sp0[valid0].max().item()) + 1 if valid0.any() else 0
+                        sp_shift = (
+                            int(sp0[valid0].max().item()) + 1 if valid0.any() else 0
+                        )
                         if sp_shift:
                             sp1 = batch["superpoint"][pt1s:pt1e]
                             valid1 = sp1 >= 0
