@@ -27,7 +27,7 @@ def handle_process(scene_path, output_path, train_scenes, val_scenes):
         split_name = "test"
 
     print(f"Processing: {scene_id} in {split_name}")
-    
+
     mesh = o3d.io.read_triangle_mesh(mesh_path)
     vertices_sp = torch.from_numpy(np.array(mesh.vertices).astype(np.float32))
     faces_sp = torch.from_numpy(np.array(mesh.triangles).astype(np.int64))
