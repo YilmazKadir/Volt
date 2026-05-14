@@ -115,11 +115,15 @@ sh scripts/train.sh -g 4 -d waymo -c semseg-volt-joint-small -n semseg-volt-join
 
 ### Instance Segmentation
 
-Download the pretrained jointly trained Volt-S backbone weights from [HuggingFace](https://huggingface.co/KadirYilmaz/Volt/tree/main)
+First, run the preprocessing script to generate superpoints for ScanNet and ScanNet200.
+```bash
+python pointcept/datasets/preprocessing/scannet/preprocess_superpoints.py --dataset_root ${RAW_SCANNET_DIR} --output_root ${PROCESSED_SCANNET_DIR}
+```
 
+Download the pretrained Volt-S backbone weights from [HuggingFace](https://huggingface.co/KadirYilmaz/Volt/tree/main)
 ```bash
 mkdir -p weights
-curl -L -o weights/volt-small-scannet.pth    https://huggingface.co/KadirYilmaz/Volt/resolve/main/Volt_experiments/joint_training_small/scannet/model/model_last.pth
+curl -L -o weights/volt-small-scannet.pth https://huggingface.co/KadirYilmaz/Volt/resolve/main/Volt_experiments/joint_training_small/scannet/model/model_last.pth
 curl -L -o weights/volt-small-scannet200.pth https://huggingface.co/KadirYilmaz/Volt/resolve/main/Volt_experiments/joint_training_small/scannet200/model/model_last.pth
 ```
 Alternatively you can train them yourself using the corresponding configs above.
