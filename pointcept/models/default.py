@@ -161,7 +161,7 @@ class DefaultSegmentorV2(nn.Module):
                 logits = self.seg_heads[condition](feat[mask])
                 loss = self.criteria(logits, input_dict["segment"][mask])
                 if not torch.isfinite(loss).all():
-                    loss = feat[mask].sum() * 0.0
+                    loss = logits.sum() * 0.0
 
                 if self.teacher is not None:
                     distill_logits = self.distill_heads[condition](feat[mask])
