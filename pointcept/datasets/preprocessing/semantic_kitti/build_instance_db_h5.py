@@ -9,7 +9,6 @@ import numpy as np
 import h5py
 import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from pointcept.datasets.utils import coords_to_normals
 
 LEARNING_MAP = {
     0: -1,  # "unlabeled"
@@ -59,7 +58,6 @@ def process_scan(data_path):
         scan = np.fromfile(b, dtype=np.float32).reshape(-1, 4)
     coord = scan[:, :3]
     strength = scan[:, -1].reshape([-1, 1])
-    normals = coords_to_normals(coord)
 
     label_file = data_path.replace("velodyne", "labels").replace(".bin", ".label")
     with open(label_file, "rb") as a:
@@ -75,13 +73,10 @@ def process_scan(data_path):
 
         inst_coord = coord[mask]
         inst_strength = strength[mask]
-        inst_normals = normals[mask]
         inst_sem_class = segment[mask][0]
 
-        # Stacking (N,3) coords + (N,1) strength + (N,3) normals = (N, 7)
-        combined_data = np.concatenate(
-            [inst_coord, inst_strength, inst_normals], axis=1
-        )
+        # Stacking (N,3) coords + (N,1) strength = (N, 4)
+        combined_data = np.concatenate([inst_coord, inst_strength], axis=1)
         results.append((inst_sem_class, data_path, p_id, combined_data))
     return results
 
