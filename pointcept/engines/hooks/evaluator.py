@@ -268,13 +268,14 @@ class InsSegEvaluator(HookBase):
         self,
         segment_ignore_index=(-1, 0, 2),
         instance_ignore_index=-1,
+        min_region_size=100,
     ):
         self.segment_ignore_index = tuple(segment_ignore_index)
         self.instance_ignore_index = int(instance_ignore_index)
 
         self.valid_class_names = None  # update in before train
         self.overlaps = np.append(np.arange(0.5, 0.95, 0.05), 0.25)
-        self.min_region_sizes = 100
+        self.min_region_sizes = int(min_region_size)
         self.distance_threshes = float("inf")
         self.distance_confs = -float("inf")
 

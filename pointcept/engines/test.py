@@ -944,6 +944,7 @@ class InsSegTester(TesterBase):
         self,
         segment_ignore_index,
         instance_ignore_index,
+        min_region_size=100,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -955,7 +956,7 @@ class InsSegTester(TesterBase):
             if i not in self.segment_ignore_index
         ]
         self.overlaps = np.append(np.arange(0.5, 0.95, 0.05), 0.25)
-        self.min_region_sizes = 100
+        self.min_region_sizes = int(min_region_size)
         self.distance_threshes = float("inf")
         self.distance_confs = -float("inf")
 
