@@ -27,6 +27,7 @@
 
 ## 📢 News
 
+- 2026-06-03: Volt won 3 challenges at CVPR 2026.
 - 2026-04-22: Code release.
 
 ## Setup
@@ -145,7 +146,7 @@ We provide the experiment directories, including configs, logs, and checkpoints.
 
 | Model | Dataset | Val mIoU | Exp. Dir |
 | :--- | :--- | :---: | :---: |
-| Volt-S | ScanNet | 76.3 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/scannet) |
+| Volt-S | ScanNet | 77.3 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/scannet) |
 | Volt-S | ScanNet200 | 36.1 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/scannet200) |
 | Volt-S | ScanNet++ | 50.2 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/scannetpp) |
 | Volt-S | nuScenes | 81.1 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/nuscenes) |
