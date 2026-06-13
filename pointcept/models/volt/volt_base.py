@@ -1,5 +1,4 @@
 import flash_attn
-import spconv.pytorch as spconv
 import torch
 import torch.nn as nn
 from timm.layers import DropPath, Mlp
@@ -8,6 +7,47 @@ from torch.nn.init import trunc_normal_
 
 from pointcept.models.builder import MODELS
 from pointcept.models.volt.decoder import Decoder
+
+
+class Tokenizer(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+    ):
+        super().__init__()
+
+        self.kernel_size = kernel_size
+        self.out_channels = out_channels
+        self.proj = nn.Linear(kernel_size**3 * in_channels, out_channels)
+
+    def forward(self, features, indices):
+        K = self.kernel_size
+
+        coarse_indices_per_voxel = indices // indices.new_tensor([1, K, K, K])
+
+        coarse_indices, inverse = torch.unique(
+            coarse_indices_per_voxel,
+            dim=0,
+            sorted=True,
+            return_inverse=True,
+        )
+
+        offset = indices[:, 1:] % K
+        offset_id = offset[:, 0] * K * K + offset[:, 1] * K + offset[:, 2]
+
+        patches = features.new_zeros(
+            coarse_indices.shape[0],
+            K**3,
+            features.shape[1],
+        )
+
+        patches[inverse, offset_id] = features
+
+        coarse_features = self.proj(patches.flatten(1))
+
+        return coarse_features, coarse_indices, inverse, offset_id
 
 
 class RoPE(nn.Module):
@@ -174,13 +214,11 @@ class Volt(nn.Module):
         norm_layer = nn.LayerNorm
         act_layer = nn.GELU
 
-        self.tokenizer = spconv.SparseConv3d(
-            in_channels,
-            embed_dim,
+        assert stride == kernel_size, "Volt only supports non-overlapping patches"
+        self.tokenizer = Tokenizer(
+            in_channels=in_channels,
+            out_channels=embed_dim,
             kernel_size=kernel_size,
-            stride=stride,
-            bias=True,
-            indice_key="embedding",
         )
 
         if increase_drop_path:
@@ -210,7 +248,6 @@ class Volt(nn.Module):
             in_channels=embed_dim,
             out_channels=up_mlp_dim,
             kernel_size=kernel_size,
-            indice_key="embedding",
         )
 
         self.apply(self._init_weights)
@@ -237,29 +274,18 @@ class Volt(nn.Module):
         grid_coord = data_dict["grid_coord"]
         feat = data_dict["feat"]
         batch = data_dict["batch"]
-        sparse_shape = torch.add(torch.max(grid_coord, dim=0).values, 96).tolist()
         indices = torch.cat(
             [batch.unsqueeze(-1).int(), grid_coord.int()], dim=1
         ).contiguous()
 
-        x = spconv.SparseConvTensor(
-            features=feat,
-            indices=indices,
-            spatial_shape=sparse_shape,
-            batch_size=batch[-1].item() + 1,
-        )
+        features, indices, inverse, offset_id = self.tokenizer(feat, indices)
 
-        x = self.tokenizer(x)
+        cu_seqlens, max_seqlen = self.compute_seqlens(indices[:, 0])
+        freqs_cis = self.pos_enc.compute_axial_cis_efficient(indices[:, 1:])
 
-        cu_seqlens, max_seqlen = self.compute_seqlens(x.indices[:, 0])
-
-        freqs_cis = self.pos_enc.compute_axial_cis_efficient(x.indices[:, 1:])
-
-        features = x.features
         for blk in self.blocks:
             features = blk(features, freqs_cis, cu_seqlens, max_seqlen)
 
-        x = x.replace_feature(features)
-        x = self.decoder(x)
+        features = self.decoder(features, inverse, offset_id)
 
-        return x.features
+        return features

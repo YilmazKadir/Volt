@@ -27,6 +27,7 @@
 
 ## 📢 News
 
+- 2026-06-13: Volt is now implemented in pure PyTorch and no longer depends on spconv.
 - 2026-06-03: Volt won 3 challenges at CVPR 2026.
 - 2026-04-22: Code release.
 
