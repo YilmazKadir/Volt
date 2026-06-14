@@ -165,8 +165,11 @@ We provide the experiment directories, including configs, logs, and checkpoints.
 | Model | Dataset | Val mIoU | Exp. Dir |
 | :--- | :--- | :---: | :---: |
 | Volt-S | ScanNet | 80.2 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_small/scannet) |
+| Volt-B | ScanNet | 80.5 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_base/scannet) |
 | Volt-S | ScanNet200 | 38.5 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_small/scannet200) |
+| Volt-B | ScanNet200 | 40.0 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_base/scannet200) |
 | Volt-S | nuScenes | 81.8 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_small/nuscenes) |
+| Volt-B | nuScenes | 82.2 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_base/nuscenes) |
 | Volt-S | SemanticKITTI | 72.8 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_small/semantic_kitti) |
 | Volt-S | Waymo | 72.5 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_small/waymo) |
 

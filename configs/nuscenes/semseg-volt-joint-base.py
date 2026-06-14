@@ -3,7 +3,7 @@ _base_ = ["../_base_/default_runtime.py"]
 # misc custom setting
 batch_size = 16  # bs: total bs in all gpus
 num_worker = 96
-mix_prob = 0.5
+mix_prob = 0.2
 empty_cache = False
 enable_amp = True
 use_ema = True
@@ -17,13 +17,13 @@ train = dict(
 # model settings
 model = dict(
     type="DefaultSegmentorV2",
-    backbone_out_channels=128,
+    backbone_out_channels=256,
     backbone=dict(
         type="Volt",
         in_channels=4,
-        embed_dim=384,
+        embed_dim=768,
         depth=12,
-        num_heads=6,
+        num_heads=12,
         mlp_ratio=4,
         init_values=None,
         qk_norm=True,
@@ -31,7 +31,7 @@ model = dict(
         stride=5,
         kernel_size=5,
         increase_drop_path=True,
-        up_mlp_dim=128,
+        up_mlp_dim=256,
     ),
     teacher=dict(
         type="DefaultSegmentorV2",
@@ -67,9 +67,9 @@ model = dict(
 )
 
 # scheduler settings
-epoch = 30
-eval_epoch = 30
-optimizer = dict(type="AdamW", lr=0.002, weight_decay=0.05)
+epoch = 40
+eval_epoch = 40
+optimizer = dict(type="AdamW", lr=0.002, weight_decay=0.1)
 scheduler = dict(
     type="OneCycleLR",
     max_lr=optimizer["lr"],
@@ -81,34 +81,77 @@ scheduler = dict(
 
 ignore_index = -1
 names = [
-    "car",
+    "barrier",
     "bicycle",
+    "bus",
+    "car",
+    "construction_vehicle",
     "motorcycle",
+    "pedestrian",
+    "traffic_cone",
+    "trailer",
     "truck",
-    "other-vehicle",
-    "person",
-    "bicyclist",
-    "motorcyclist",
-    "road",
-    "parking",
+    "driveable_surface",
+    "other_flat",
     "sidewalk",
-    "other-ground",
-    "building",
-    "fence",
-    "vegetation",
-    "trunk",
     "terrain",
-    "pole",
-    "traffic-sign",
+    "manmade",
+    "vegetation",
 ]
 
 data = dict(
-    num_classes=19,
+    num_classes=16,
     ignore_index=ignore_index,
     names=names,
     train=dict(
         type="ConcatDataset",
         datasets=[
+            # nuScenes
+            dict(
+                type="NuScenesDataset",
+                split="train",
+                data_root="data/nuscenes",
+                transform=[
+                    # dict(type="RandomDropout", dropout_ratio=0.2, dropout_application_ratio=0.2),
+                    # dict(type="RandomRotateTargetAngle", angle=(1/2, 1, 3/2), center=[0, 0, 0], axis="z", p=0.75),
+                    dict(
+                        type="RandomRotate",
+                        angle=[-1, 1],
+                        axis="z",
+                        center=[0, 0, 0],
+                        p=0.5,
+                    ),
+                    dict(type="RandomRotate", angle=[-1 / 64, 1 / 64], axis="x", p=0.5),
+                    dict(type="RandomRotate", angle=[-1 / 64, 1 / 64], axis="y", p=0.5),
+                    dict(
+                        type="PointClipDistance", max_dist=70.0, z_min=-4.0, z_max=2.0
+                    ),
+                    dict(type="RandomScale", scale=[0.9, 1.1]),
+                    # dict(type="RandomShift", shift=[0.2, 0.2, 0.2]),
+                    dict(type="RandomFlip", p=0.5),
+                    dict(type="RandomJitter", sigma=0.005, clip=0.02),
+                    # dict(type="ElasticDistortion", distortion_params=[[0.2, 0.4], [0.8, 1.6]]),
+                    dict(
+                        type="GridSample",
+                        grid_size=0.05,
+                        hash_type="fnv",
+                        mode="train",
+                        return_grid_coord=True,
+                    ),
+                    dict(type="SphereCrop", sample_rate=0.6, mode="random"),
+                    # dict(type="CenterShift", apply_z=False),
+                    dict(type="Update", keys_dict={"condition": "nuScenes"}),
+                    dict(type="ToTensor"),
+                    dict(
+                        type="Collect",
+                        keys=("coord", "grid_coord", "segment", "condition"),
+                        feat_keys=("coord", "strength"),
+                    ),
+                ],
+                test_mode=False,
+                ignore_index=ignore_index,
+                loop=2,  # sampling weight
+            ),
             # SemanticKITTI
             dict(
                 type="SemanticKITTIDataset",
@@ -223,68 +266,15 @@ data = dict(
                 ignore_index=ignore_index,
                 loop=1,  # sampling weight
             ),
-            # nuScenes
-            dict(
-                type="NuScenesDataset",
-                split="train",
-                data_root="data/nuscenes",
-                transform=[
-                    # dict(type="RandomDropout", dropout_ratio=0.2, dropout_application_ratio=0.2),
-                    # dict(type="RandomRotateTargetAngle", angle=(1/2, 1, 3/2), center=[0, 0, 0], axis="z", p=0.75),
-                    dict(
-                        type="RandomRotateTargetAngle",
-                        angle=[-1 / 2],
-                        axis="z",
-                        center=[0, 0, 0],
-                        p=1,
-                    ),
-                    dict(
-                        type="RandomRotate",
-                        angle=[-1, 1],
-                        axis="z",
-                        center=[0, 0, 0],
-                        p=0.5,
-                    ),
-                    dict(type="RandomRotate", angle=[-1 / 64, 1 / 64], axis="x", p=0.5),
-                    dict(type="RandomRotate", angle=[-1 / 64, 1 / 64], axis="y", p=0.5),
-                    dict(
-                        type="PointClipDistance", max_dist=70.0, z_min=-4.0, z_max=2.0
-                    ),
-                    dict(type="RandomScale", scale=[0.9, 1.1]),
-                    # dict(type="RandomShift", shift=[0.2, 0.2, 0.2]),
-                    dict(type="RandomFlip", p=0.5),
-                    dict(type="RandomJitter", sigma=0.005, clip=0.02),
-                    # dict(type="ElasticDistortion", distortion_params=[[0.2, 0.4], [0.8, 1.6]]),
-                    dict(
-                        type="GridSample",
-                        grid_size=0.05,
-                        hash_type="fnv",
-                        mode="train",
-                        return_grid_coord=True,
-                    ),
-                    dict(type="SphereCrop", sample_rate=0.6, mode="random"),
-                    # dict(type="CenterShift", apply_z=False),
-                    dict(type="Update", keys_dict={"condition": "nuScenes"}),
-                    dict(type="ToTensor"),
-                    dict(
-                        type="Collect",
-                        keys=("coord", "grid_coord", "segment", "condition"),
-                        feat_keys=("coord", "strength"),
-                    ),
-                ],
-                test_mode=False,
-                ignore_index=ignore_index,
-                loop=2,  # sampling weight
-            ),
         ],
     ),
     val=dict(
-        type="SemanticKITTIDataset",
+        type="NuScenesDataset",
         split="val",
-        data_root="data/semantic_kitti",
+        data_root="data/nuscenes",
         transform=[
             dict(type="Copy", keys_dict={"segment": "origin_segment"}),
-            dict(type="PointClipDistance", max_dist=50.0, z_min=-4.0, z_max=2.0),
+            dict(type="PointClipDistance", max_dist=70.0, z_min=-4.0, z_max=2.0),
             dict(
                 type="GridSample",
                 grid_size=0.05,
@@ -293,7 +283,7 @@ data = dict(
                 return_grid_coord=True,
                 return_inverse=True,
             ),
-            dict(type="Update", keys_dict={"condition": "SemanticKITTI"}),
+            dict(type="Update", keys_dict={"condition": "nuScenes"}),
             dict(type="ToTensor"),
             dict(
                 type="Collect",
@@ -312,11 +302,11 @@ data = dict(
         ignore_index=ignore_index,
     ),
     test=dict(
-        type="SemanticKITTIDataset",
+        type="NuScenesDataset",
         split="val",
-        data_root="data/semantic_kitti",
+        data_root="data/nuscenes",
         transform=[
-            dict(type="PointClipDistance", max_dist=50.0, z_min=-4.0, z_max=2.0),
+            dict(type="PointClipDistance", max_dist=70.0, z_min=-4.0, z_max=2.0),
             dict(type="Copy", keys_dict={"segment": "origin_segment"}),
             dict(
                 type="GridSample",
@@ -337,7 +327,7 @@ data = dict(
             ),
             crop=None,
             post_transform=[
-                dict(type="Update", keys_dict={"condition": "SemanticKITTI"}),
+                dict(type="Update", keys_dict={"condition": "nuScenes"}),
                 dict(type="ToTensor"),
                 dict(
                     type="Collect",
