@@ -57,6 +57,12 @@ Follow the dataset setup instructions in the [Pointcept README](https://github.c
 ### Indoor Datasets
 Preprocessing for indoor datasets is identical to Pointcept.
 
+### SceneFUN3D Dataset
+Run the preprocessing script below.
+```bash
+python pointcept/datasets/preprocessing/scenefun3d/preprocess_scenefun3d.py --dataset_root ${SCENEFUN3D_DIR} --output_root ${PROCESSED_SCENEFUN3D_DIR}
+```
+
 ### Nuscenes
 For **nuScenes**, run the preprocessing script below. Unlike Pointcept preprocessing, we additionally write panoptic labels to the `.pkl` files.
 ```bash
