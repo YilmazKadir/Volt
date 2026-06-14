@@ -29,7 +29,7 @@ model = dict(
         up_mlp_dim=256,
     ),
     criteria=[
-            dict(
+        dict(
             type="CrossEntropyLoss",
             weight=[
                 0.1,
