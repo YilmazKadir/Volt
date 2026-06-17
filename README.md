@@ -57,7 +57,7 @@ Follow the dataset setup instructions in the [Pointcept README](https://github.c
 ### Indoor Datasets
 Preprocessing for indoor datasets is identical to Pointcept.
 
-### SceneFUN3D Dataset
+### SceneFun3D Dataset
 Run the preprocessing script below.
 ```bash
 python pointcept/datasets/preprocessing/scenefun3d/preprocess_scenefun3d.py --dataset_root ${SCENEFUN3D_DIR} --output_root ${PROCESSED_SCENEFUN3D_DIR}
@@ -128,11 +128,13 @@ First, run the preprocessing script to generate superpoints for ScanNet and Scan
 python pointcept/datasets/preprocessing/scannet/preprocess_superpoints.py --dataset_root ${RAW_SCANNET_DIR} --output_root ${PROCESSED_SCANNET_DIR}
 ```
 
-Download the pretrained Volt-S backbone weights from [HuggingFace](https://huggingface.co/KadirYilmaz/Volt/tree/main)
+Download the pretrained Volt backbone weights from [HuggingFace](https://huggingface.co/KadirYilmaz/Volt/tree/main)
 ```bash
 mkdir -p weights
 curl -L -o weights/volt-small-scannet.pth https://huggingface.co/KadirYilmaz/Volt/resolve/main/Volt_experiments/joint_training_small/scannet/model/model_last.pth
+curl -L -o weights/volt-base-scannet.pth https://huggingface.co/KadirYilmaz/Volt/resolve/main/Volt_experiments/joint_training_base/scannet/model/model_last.pth
 curl -L -o weights/volt-small-scannet200.pth https://huggingface.co/KadirYilmaz/Volt/resolve/main/Volt_experiments/joint_training_small/scannet200/model/model_last.pth
+curl -L -o weights/volt-base-scannet200.pth https://huggingface.co/KadirYilmaz/Volt/resolve/main/Volt_experiments/joint_training_base/scannet200/model/model_last.pth
 ```
 Alternatively you can train them yourself using the corresponding configs above.
 
@@ -143,6 +145,12 @@ Then, run the training script with the `insseg-spformer-volt-S-0-base` config fo
 sh scripts/train.sh -g 4 -d scannet -c insseg-spformer-volt-S-0-base -n insseg-volt
 ### ScanNet200
 sh scripts/train.sh -g 4 -d scannet200 -c insseg-spformer-volt-S-0-base -n insseg-volt
+```
+
+For SceneFun3D, we train the model for semantic segmentation only, and use a simple clustering-based post-processing algorithm for instance segmentation. This is done automatically in the SceneFun3DTester and the results are saved in the correct format.
+```bash
+### SceneFun3D
+sh scripts/train.sh -g 4 -d scenefun3d -c semseg-volt-base -n insseg-volt
 ```
 
 ## Model Zoo

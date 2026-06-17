@@ -8,6 +8,13 @@ empty_cache = False
 enable_amp = True
 use_ema = True
 
+weight = "weights/volt-base-scannet200.pth"
+
+# Instance Segmentation Configuration
+min_points = 10
+knn = 32
+knn_radius = 0.02
+
 # model settings
 model = dict(
     type="DefaultSegmentorV2",
@@ -64,7 +71,7 @@ scheduler = dict(
 )
 
 # dataset settings
-dataset_type = "DefaultDataset"
+dataset_type = "SceneFun3DDataset"
 data_root = "data/scenefun3d"
 
 data = dict(
@@ -155,6 +162,12 @@ data = dict(
         split="val",
         data_root=data_root,
         transform=[
+            dict(
+                type="Copy",
+                keys_dict={
+                    "coord": "origin_coord",
+                },
+            ),
             dict(type="CenterShift", apply_z=True),
             dict(type="NormalizeColor"),
         ],
@@ -299,3 +312,5 @@ data = dict(
         ),
     ),
 )
+
+test = dict(type="SceneFun3DTester", verbose=True)
