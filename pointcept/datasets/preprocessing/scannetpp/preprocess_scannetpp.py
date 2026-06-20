@@ -6,18 +6,20 @@ Author: Xiaoyang Wu (xiaoyang.wu.cs@gmail.com)
 Please cite our work if the code is helpful to you.
 """
 
-import warnings
 import argparse
 import json
-import torch
-import numpy as np
-import pandas as pd
-import open3d as o3d
 import multiprocessing as mp
+import os
+import warnings
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from itertools import repeat
 from pathlib import Path
+
+import numpy as np
+import open3d as o3d
+import pandas as pd
+import torch
 
 try:
     import pointseg
@@ -244,7 +246,7 @@ if __name__ == "__main__":
     print("Num classes in instance class list:", len(instance_class_names))
 
     label_mapping = pd.read_csv(
-        config.dataset_root / "metadata" / "semantic_benchmark" / "map_benchmark.csv"
+        Path(os.path.dirname(__file__)) / "meta_data" / "new_map_benchmark.csv"
     )
     label_mapping = filter_map_classes(label_mapping, mapping_type="semantic")
     class2idx = {
@@ -263,12 +265,3 @@ if __name__ == "__main__":
             repeat(class2idx),
             repeat(config.ignore_index),
         )
-    # parse_scene(
-    #     data_list[0],
-    #     split_list[0],
-    #     config.dataset_root,
-    #     config.output_root,
-    #     label_mapping,
-    #     class2idx,
-    #     config.ignore_index,
-    # )

@@ -56,7 +56,13 @@ source .venv/bin/activate
 Follow the dataset setup instructions in the [Pointcept README](https://github.com/Pointcept/Pointcept/blob/04a0232b70f5c7091ffdc6bfe7a476e3eb7daff2/README.md).
 
 ### Indoor Datasets
-Preprocessing for indoor datasets is identical to Pointcept.
+Preprocessing for ScanNet and ScanNet200 is identical to Pointcept.
+
+### ScanNet++ Dataset
+After the ECCV submission, we found that the original `map_benchmark.csv` is not exhaustive, as discussed [here](https://github.com/scannetpp/scannetpp/issues/109#issuecomment-2518131679). As a result, some labels were mapped to `ignore`. We therefore regenerate `map_benchmark.csv` and provide the updated version at `pointcept/datasets/preprocessing/scannetpp/new_map_benchmark.csv`. Run the preprocessing script below which uses this new mapping.
+```bash
+python pointcept/datasets/preprocessing/scannetpp/preprocess_scannetpp.py --dataset_root ${SCANNETPP_DIR} --output_root ${PROCESSED_SCANNETPP_DIR}
+```
 
 ### SceneFun3D Dataset
 Run the preprocessing script below.
