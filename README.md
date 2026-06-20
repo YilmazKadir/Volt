@@ -1,4 +1,4 @@
-<h1 align="center">Volume Transformer: Revisiting Vanilla Transformers for 3D Scene Understanding</h1>
+<h1 align="center">Volume Transformer: Revisiting Vanilla Transformers for 3D Scene Understanding (ECCV 2026)</h1>
 
 <p align="center">
   <a href="https://arxiv.org/abs/2604.19609">Paper</a>
@@ -27,6 +27,7 @@
 
 ## 📢 News
 
+- 2026-06-18: 🎉 Volt is accepted to ECCV 2026!
 - 2026-06-13: Volt is now implemented in pure PyTorch and no longer depends on spconv.
 - 2026-06-03: Volt won 3 challenges at CVPR 2026.
 - 2026-04-22: Code release.
@@ -186,10 +187,10 @@ We provide the experiment directories, including configs, logs, and checkpoints.
 If you use our work in your research, please use the following BibTeX entry.
 
 ```
-@article{yilmaz2026volt,
+@inproceedings{yilmaz2026volt,
   title     = {{Volume Transformer: Revisiting Vanilla Transformers for 3D Scene Understanding}},
-  author    = {Yilmaz, Kadir and Kruse, Adrian and Höfer, Tristan and de Geus, Daan and Leibe, Bastian},
-  journal   = {arXiv preprint arXiv:2604.19609},
-  year      = {2026}
+  author    = {Yilmaz, Kadir and Kruse, Adrian and H{\"o}fer, Tristan and de Geus, Daan and Leibe, Bastian},
+  booktitle = {European Conference on Computer Vision (ECCV)},
+  year      = {2026},
 }
 ```
