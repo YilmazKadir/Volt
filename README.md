@@ -170,7 +170,7 @@ We provide the experiment directories, including configs, logs, and checkpoints.
 | :--- | :--- | :---: | :---: |
 | Volt-S | ScanNet | 77.3 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/scannet) |
 | Volt-S | ScanNet200 | 36.1 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/scannet200) |
-| Volt-S | ScanNet++ | 50.2 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/scannetpp) |
+| Volt-S | ScanNet++ | 51.1 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/scannetpp) |
 | Volt-S | nuScenes | 81.1 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/nuscenes) |
 | Volt-S | SemanticKITTI | 70.3 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/semantic_kitti) |
 | Volt-S | Waymo | 71.2 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/single_dataset/waymo) |
@@ -183,6 +183,7 @@ We provide the experiment directories, including configs, logs, and checkpoints.
 | Volt-B | ScanNet | 80.5 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_base/scannet) |
 | Volt-S | ScanNet200 | 38.5 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_small/scannet200) |
 | Volt-B | ScanNet200 | 40.0 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_base/scannet200) |
+| Volt-B | ScanNet++ | 51.7 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_base/scannetpp) |
 | Volt-S | nuScenes | 81.8 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_small/nuscenes) |
 | Volt-B | nuScenes | 82.2 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_base/nuscenes) |
 | Volt-S | SemanticKITTI | 72.8 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_small/semantic_kitti) |
