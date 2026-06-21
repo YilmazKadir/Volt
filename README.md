@@ -188,6 +188,7 @@ We provide the experiment directories, including configs, logs, and checkpoints.
 | Volt-B | nuScenes | 82.2 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_base/nuscenes) |
 | Volt-S | SemanticKITTI | 72.8 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_small/semantic_kitti) |
 | Volt-S | Waymo | 72.5 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_small/waymo) |
+| Volt-B | Waymo | 73.7 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/joint_training_base/waymo) |
 
 ## Citation
 
