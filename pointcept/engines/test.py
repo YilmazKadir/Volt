@@ -1073,11 +1073,7 @@ class InsSegTester(TesterBase):
         result_path = os.path.join(save_dir, f"{data_name}.txt")
         result_file = open(result_path, "w")
         for i, (score, mask, cls) in enumerate(
-            zip(
-                pred_scores.cpu().numpy(),
-                pred_masks.cpu().numpy(),
-                pred_classes.cpu().numpy(),
-            )
+            zip(pred_scores, pred_masks, pred_classes)
         ):
             mask = mask.astype(np.uint8)
             length = mask.shape[0]
