@@ -298,8 +298,6 @@ class Trainer(TrainerBase):
             b_ema.copy_(b)
 
     def build_writer(self):
-        writer = SummaryWriter(self.cfg.save_path) if comm.is_main_process() else None
-        self.logger.info(f"Tensorboard writer logging dir: {self.cfg.save_path}")
         if self.cfg.enable_wandb and comm.is_main_process():
             tag, name = Path(self.cfg.save_path).parts[-2:]
             wandb.init(
@@ -308,7 +306,14 @@ class Trainer(TrainerBase):
                 tags=[tag],
                 settings=wandb.Settings(api_key=self.cfg.wandb_key),
                 config=self.cfg,
+                sync_tensorboard=True,
             )
+            wandb.define_metric("params/*", step_metric="Iter")
+            wandb.define_metric("train_batch/*", step_metric="Iter")
+            wandb.define_metric("train/*", step_metric="Epoch")
+            wandb.define_metric("val/*", step_metric="Epoch")
+        writer = SummaryWriter(self.cfg.save_path) if comm.is_main_process() else None
+        self.logger.info(f"Tensorboard writer logging dir: {self.cfg.save_path}")
         return writer
 
     def build_train_loader(self):

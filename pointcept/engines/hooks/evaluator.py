@@ -6,7 +6,6 @@ Please cite our work if the code is helpful to you.
 """
 
 import numpy as np
-import wandb
 import torch
 import torch.distributed as dist
 import pointops
@@ -103,17 +102,6 @@ class ClsEvaluator(HookBase):
             self.trainer.writer.add_scalar("val/mIoU", m_iou, current_epoch)
             self.trainer.writer.add_scalar("val/mAcc", m_acc, current_epoch)
             self.trainer.writer.add_scalar("val/allAcc", all_acc, current_epoch)
-            if self.trainer.cfg.enable_wandb:
-                wandb.log(
-                    {
-                        "Epoch": current_epoch,
-                        "val/loss": loss_avg,
-                        "val/mIoU": m_iou,
-                        "val/mAcc": m_acc,
-                        "val/allAcc": all_acc,
-                    },
-                    step=wandb.run.step,
-                )
         self.trainer.logger.info("<<<<<<<<<<<<<<<<< End Evaluation <<<<<<<<<<<<<<<<<")
         self.trainer.comm_info["current_metric_value"] = all_acc  # save for saver
         self.trainer.comm_info["current_metric_name"] = "allAcc"  # save for saver
@@ -128,10 +116,6 @@ class ClsEvaluator(HookBase):
 class SemSegEvaluator(HookBase):
     def __init__(self, write_cls_iou=False):
         self.write_cls_iou = write_cls_iou
-
-    def before_train(self):
-        if self.trainer.writer is not None and self.trainer.cfg.enable_wandb:
-            wandb.define_metric("val/*", step_metric="Epoch")
 
     def after_epoch(self):
         if self.trainer.cfg.evaluate:
@@ -223,17 +207,6 @@ class SemSegEvaluator(HookBase):
             self.trainer.writer.add_scalar("val/mIoU", m_iou, current_epoch)
             self.trainer.writer.add_scalar("val/mAcc", m_acc, current_epoch)
             self.trainer.writer.add_scalar("val/allAcc", all_acc, current_epoch)
-            if self.trainer.cfg.enable_wandb:
-                wandb.log(
-                    {
-                        "Epoch": current_epoch,
-                        "val/loss": loss_avg,
-                        "val/mIoU": m_iou,
-                        "val/mAcc": m_acc,
-                        "val/allAcc": all_acc,
-                    },
-                    step=wandb.run.step,
-                )
             if self.write_cls_iou:
                 for i in range(self.trainer.cfg.data.num_classes):
                     self.trainer.writer.add_scalar(
@@ -241,17 +214,6 @@ class SemSegEvaluator(HookBase):
                         iou_class[i],
                         current_epoch,
                     )
-                if self.trainer.cfg.enable_wandb:
-                    for i in range(self.trainer.cfg.data.num_classes):
-                        wandb.log(
-                            {
-                                "Epoch": current_epoch,
-                                f"val/cls_{i}-{self.trainer.cfg.data.names[i]} IoU": iou_class[
-                                    i
-                                ],
-                            },
-                            step=wandb.run.step,
-                        )
         self.trainer.logger.info("<<<<<<<<<<<<<<<<< End Evaluation <<<<<<<<<<<<<<<<<")
         self.trainer.comm_info["current_metric_value"] = m_iou  # save for saver
         self.trainer.comm_info["current_metric_name"] = "mIoU"  # save for saver
@@ -702,29 +664,6 @@ class InsSegEvaluator(HookBase):
                 self.trainer.writer.add_scalar(
                     "val/Rec50", ap_scores["all_rec_50%"], current_epoch
                 )
-                if self.trainer.cfg.enable_wandb:
-                    wandb.log(
-                        {
-                            "Epoch": current_epoch,
-                            "val/loss": loss_avg["val_loss"],
-                            "val/mAP": ap_scores["all_ap"],
-                            "val/AP50": ap_scores["all_ap_50%"],
-                            "val/AP25": ap_scores["all_ap_25%"],
-                            "val/Prec50": ap_scores["all_prec_50%"],
-                            "val/Rec50": ap_scores["all_rec_50%"],
-                        },
-                        step=wandb.run.step,
-                    )
-                    for key in loss_avg.keys():
-                        if key == "val_loss":
-                            continue
-                        wandb.log(
-                            {
-                                "Epoch": current_epoch,
-                                "val/" + key: loss_avg[key],
-                            },
-                            step=wandb.run.step,
-                        )
             self.trainer.logger.info(
                 "<<<<<<<<<<<<<<<<<<< End Evaluation <<<<<<<<<<<<<<<<<"
             )

@@ -17,7 +17,6 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 import torch.utils.data
-import wandb
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
 from scipy.spatial import cKDTree
@@ -51,7 +50,9 @@ TESTERS = Registry("testers")
 
 
 class TesterBase:
-    def __init__(self, cfg, model=None, test_loader=None, verbose=False) -> None:
+    def __init__(
+        self, cfg, model=None, test_loader=None, writer=None, verbose=False
+    ) -> None:
         torch.multiprocessing.set_sharing_strategy("file_system")
         self.logger = get_root_logger(
             log_file=os.path.join(cfg.save_path, "test.log"),
@@ -60,6 +61,7 @@ class TesterBase:
         self.logger.info("=> Loading config ...")
         self.cfg = cfg
         self.verbose = verbose
+        self.writer = writer
         if self.verbose and model is None:
             # if model is not none, trigger tester with trainer, no need to print config
             self.logger.info(f"Save path: {cfg.save_path}")
@@ -364,15 +366,10 @@ class SemSegTester(TesterBase):
                     mIoU, mAcc, allAcc
                 )
             )
-            if self.cfg.enable_wandb and wandb.run is not None:
-                wandb.log(
-                    {
-                        "test/mIoU": mIoU,
-                        "test/mAcc": mAcc,
-                        "test/allAcc": allAcc,
-                    },
-                    step=wandb.run.step,
-                )
+            if self.writer is not None:
+                self.writer.add_scalar("test/mIoU", mIoU, 0)
+                self.writer.add_scalar("test/mAcc", mAcc, 0)
+                self.writer.add_scalar("test/allAcc", allAcc, 0)
 
             for i in range(self.cfg.data.num_classes):
                 logger.info(
@@ -1623,15 +1620,10 @@ class SceneFun3DTester(TesterBase):
                     mIoU, mAcc, allAcc
                 )
             )
-            if self.cfg.enable_wandb and wandb.run is not None:
-                wandb.log(
-                    {
-                        "test/mIoU": mIoU,
-                        "test/mAcc": mAcc,
-                        "test/allAcc": allAcc,
-                    },
-                    step=wandb.run.step,
-                )
+            if self.writer is not None:
+                self.writer.add_scalar("test/mIoU", mIoU, 0)
+                self.writer.add_scalar("test/mAcc", mAcc, 0)
+                self.writer.add_scalar("test/allAcc", allAcc, 0)
 
             for i in range(self.cfg.data.num_classes):
                 logger.info(

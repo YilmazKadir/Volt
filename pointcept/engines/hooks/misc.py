@@ -11,9 +11,7 @@ import os
 import shutil
 import time
 import gc
-import wandb
 import torch
-import torch.utils.data
 from collections import OrderedDict
 
 if sys.version_info >= (3, 10):
@@ -86,10 +84,6 @@ class InformationWriter(HookBase):
     def before_train(self):
         self.trainer.comm_info["iter_info"] = ""
         self.curr_iter = self.trainer.start_epoch * len(self.trainer.train_loader)
-        if self.trainer.writer is not None and self.trainer.cfg.enable_wandb:
-            wandb.define_metric("params/*", step_metric="Iter")
-            wandb.define_metric("train_batch/*", step_metric="Iter")
-            wandb.define_metric("train/*", step_metric="Epoch")
 
     def before_step(self):
         self.curr_iter += 1
@@ -117,6 +111,7 @@ class InformationWriter(HookBase):
         self.trainer.logger.info(self.trainer.comm_info["iter_info"])
         self.trainer.comm_info["iter_info"] = ""  # reset iter info
         if self.trainer.writer is not None:
+            self.trainer.writer.add_scalar("Iter", self.curr_iter, self.curr_iter)
             self.trainer.writer.add_scalar("params/lr", lr, self.curr_iter)
             for key in self.model_output_keys:
                 self.trainer.writer.add_scalar(
@@ -124,19 +119,6 @@ class InformationWriter(HookBase):
                     self.trainer.storage.history(key).val,
                     self.curr_iter,
                 )
-            if self.trainer.cfg.enable_wandb:
-
-                wandb.log(
-                    {"Iter": self.curr_iter, "params/lr": lr}, step=self.curr_iter
-                )
-                for key in self.model_output_keys:
-                    wandb.log(
-                        {
-                            "Iter": self.curr_iter,
-                            f"train_batch/{key}": self.trainer.storage.history(key).val,
-                        },
-                        step=wandb.run.step,
-                    )
 
     def after_epoch(self):
         epoch_info = "Train result: "
@@ -146,23 +128,15 @@ class InformationWriter(HookBase):
             )
         self.trainer.logger.info(epoch_info)
         if self.trainer.writer is not None:
+            self.trainer.writer.add_scalar(
+                "Epoch", self.trainer.epoch + 1, self.trainer.epoch + 1
+            )
             for key in self.model_output_keys:
                 self.trainer.writer.add_scalar(
                     "train/" + key,
                     self.trainer.storage.history(key).avg,
                     self.trainer.epoch + 1,
                 )
-
-            if self.trainer.cfg.enable_wandb:
-
-                for key in self.model_output_keys:
-                    wandb.log(
-                        {
-                            "Epoch": self.trainer.epoch + 1,
-                            f"train/{key}": self.trainer.storage.history(key).avg,
-                        },
-                        step=wandb.run.step,
-                    )
 
 
 @HOOKS.register_module()
@@ -310,7 +284,9 @@ class PreciseEvaluator(HookBase):
         )
         torch.cuda.empty_cache()
         cfg = self.trainer.cfg
-        test_cfg = dict(cfg=cfg, model=self.trainer.model, **cfg.test)
+        test_cfg = dict(
+            cfg=cfg, model=self.trainer.model, writer=self.trainer.writer, **cfg.test
+        )
         tester = TESTERS.build(test_cfg)
         if self.test_last:
             self.trainer.logger.info("=> Testing on model_last ...")
