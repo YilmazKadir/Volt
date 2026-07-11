@@ -563,7 +563,7 @@ class InsSegEvaluator(HookBase):
     def eval(self):
         self.trainer.logger.info(">>>>>>>>>>>>>>>> Start Evaluation >>>>>>>>>>>>>>>>")
         self.trainer.model.eval()
-        scenes = []
+        scenes = {}
         val_loader = self.trainer.val_loader
         if isinstance(val_loader, (list, tuple)):
             val_loader = val_loader[0]
@@ -574,6 +574,7 @@ class InsSegEvaluator(HookBase):
 
         for i, input_dict in enumerate(val_loader):
             assert len(input_dict["offset"]) == 1
+            data_name = input_dict.pop("name")[0]
             for key in input_dict.keys():
                 if isinstance(input_dict[key], torch.Tensor):
                     input_dict[key] = input_dict[key].cuda(non_blocking=True)
@@ -607,7 +608,7 @@ class InsSegEvaluator(HookBase):
             gt_instances, pred_instance = self.associate_instances(
                 output_dict, segment, instance
             )
-            scenes.append(dict(gt=gt_instances, pred=pred_instance))
+            scenes[data_name] = dict(gt=gt_instances, pred=pred_instance)
 
             val_sum += float(loss.item())
             val_n += 1
@@ -635,7 +636,12 @@ class InsSegEvaluator(HookBase):
         scenes_sync = comm.gather(scenes, dst=0)
 
         if comm.is_main_process():
-            scenes = [scene for scenes_ in scenes_sync for scene in scenes_]
+            scenes = {}
+            for _ in range(len(scenes_sync)):
+                r = scenes_sync.pop()
+                scenes.update(r)
+                del r
+            scenes = list(scenes.values())
             ap_scores = self.evaluate_matches(scenes)
             self.print_results(ap_scores)
             current_epoch = self.trainer.epoch + 1

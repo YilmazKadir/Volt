@@ -142,6 +142,7 @@ curl -L -o weights/volt-small-scannet.pth https://huggingface.co/KadirYilmaz/Vol
 curl -L -o weights/volt-base-scannet.pth https://huggingface.co/KadirYilmaz/Volt/resolve/main/Volt_experiments/joint_training_base/scannet/model/model_last.pth
 curl -L -o weights/volt-small-scannet200.pth https://huggingface.co/KadirYilmaz/Volt/resolve/main/Volt_experiments/joint_training_small/scannet200/model/model_last.pth
 curl -L -o weights/volt-base-scannet200.pth https://huggingface.co/KadirYilmaz/Volt/resolve/main/Volt_experiments/joint_training_base/scannet200/model/model_last.pth
+curl -L -o weights/volt-base-scannetpp.pth https://huggingface.co/KadirYilmaz/Volt/resolve/main/Volt_experiments/joint_training_base/scannetpp/model/model_last.pth
 ```
 Alternatively you can train them yourself using the corresponding configs above.
 
@@ -152,6 +153,8 @@ Then, run the training script with the `insseg-spformer-volt-S-0-base` config fo
 sh scripts/train.sh -g 4 -d scannet -c insseg-spformer-volt-S-0-base -n insseg-volt
 ### ScanNet200
 sh scripts/train.sh -g 4 -d scannet200 -c insseg-spformer-volt-S-0-base -n insseg-volt
+### ScanNet++
+sh scripts/train.sh -g 4 -d scannetpp -c insseg-spformer-volt-B-0-base -n insseg-volt
 ```
 
 For SceneFun3D, we train the model for semantic segmentation only, and use a simple clustering-based post-processing algorithm for instance segmentation. This is done automatically in the SceneFun3DTester and the results are saved in the correct format.
