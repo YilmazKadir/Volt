@@ -1,4 +1,7 @@
-<h1 align="center">Volume Transformer: Revisiting Vanilla Transformers for 3D Scene Understanding (ECCV 2026)</h1>
+<h1 align="center">
+  Volume Transformer: Revisiting Vanilla Transformers for 3D Scene Understanding<br>
+  (ECCV 2026 Long Oral)
+</h1>
 
 <p align="center">
   <a href="https://arxiv.org/abs/2604.19609">Paper</a>
@@ -27,6 +30,7 @@
 
 ## 📢 News
 
+- 2026-08-05: 🎉🎉 Volt is selected as one of the 28 Long Oral presentations at ECCV 2026!
 - 2026-06-18: 🎉 Volt is accepted to ECCV 2026!
 - 2026-06-13: Volt is now implemented in pure PyTorch and no longer depends on spconv.
 - 2026-06-03: Volt won 3 challenges at CVPR 2026.
