@@ -204,7 +204,6 @@ We provide the experiment directories, including configs, logs, and checkpoints.
 | Volt-S | ScanNet | 78.5 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/instance_segmentation/scannet_volt_small) |
 | Volt-S | ScanNet200 | 49.0 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/instance_segmentation/scannet200_volt_small) |
 | Volt-B | ScanNet++ | 53.1 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/instance_segmentation/scannetpp_volt_base) |
-| Volt-B | SceneFun3D | 53.7 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/instance_segmentation/scenefun3d_volt_base) |
 
 ## Citation
 
