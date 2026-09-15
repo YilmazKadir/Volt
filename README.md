@@ -161,7 +161,7 @@ sh scripts/train.sh -g 4 -d scannet200 -c insseg-spformer-volt-S-0-base -n insse
 sh scripts/train.sh -g 4 -d scannetpp -c insseg-spformer-volt-B-0-base -n insseg-volt
 ```
 
-For SceneFun3D, we train the model for semantic segmentation only, and use a simple clustering-based post-processing algorithm for instance segmentation. This is done automatically in the SceneFun3DTester and the results are saved in the correct format.
+For SceneFun3D, we train the model for semantic segmentation only, and use a simple clustering-based post-processing algorithm for instance segmentation. This is done automatically in the SceneFun3DTester and the results are saved in the correct format. We note that we achieve much higher scores on the validation set compared to the test set but we don't have a reason why and we don't know if it is specific to our approach. It could be due to the fact that the test set containing more challenging scenes.
 ```bash
 ### SceneFun3D
 sh scripts/train.sh -g 4 -d scenefun3d -c semseg-volt-base -n insseg-volt
@@ -204,6 +204,7 @@ We provide the experiment directories, including configs, logs, and checkpoints.
 | Volt-S | ScanNet | 78.5 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/instance_segmentation/scannet_volt_small) |
 | Volt-S | ScanNet200 | 49.0 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/instance_segmentation/scannet200_volt_small) |
 | Volt-B | ScanNet++ | 53.1 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/instance_segmentation/scannetpp_volt_base) |
+| Volt-B | SceneFun3D | 53.7 | [link](https://huggingface.co/KadirYilmaz/Volt/tree/main/Volt_experiments/instance_segmentation/scenefun3d_volt_base) |
 
 ## Citation
 
